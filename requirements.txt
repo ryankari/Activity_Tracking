@@ -6,3 +6,4 @@ openpyxl
 PyQt5
 ollama
 pytest
+jinja2

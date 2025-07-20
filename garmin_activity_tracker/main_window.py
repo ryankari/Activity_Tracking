@@ -1,11 +1,21 @@
-
 import sys
 import os
-#sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTextEdit, QLineEdit, QLabel, QSizePolicy, QMessageBox, QSpacerItem
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QTextEdit,
+    QLineEdit,
+    QLabel,
+    QSizePolicy,
+    QMessageBox,
+    QSpacerItem,
 )
 from PyQt5.QtWidgets import QComboBox, QHBoxLayout
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -21,13 +31,23 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib
-matplotlib.use('Qt5Agg')
+
+matplotlib.use("Qt5Agg")
 from garmin_activity_tracker.core import ActivityTracker
 from garmin_activity_tracker.plots import (
-    plot_TSS, create_basic_metric_plot, createAdvancedMetricPlot, plotSplits, plot_calendar
+    plot_TSS,
+    create_basic_metric_plot,
+    createAdvancedMetricPlot,
+    plotSplits,
+    plot_calendar,
 )
 from garmin_activity_tracker.utils_AI import get_response, AI_format
-from garmin_activity_tracker.styles import modern_button_style, modern_combobox_style, ai_running_style
+from garmin_activity_tracker.styles import (
+    modern_button_style,
+    modern_combobox_style,
+    ai_running_style,
+)
+
 
 class AIWorker(QThread):
     chunk_ready = pyqtSignal(str)
@@ -41,10 +61,11 @@ class AIWorker(QThread):
     def run(self):
         try:
             from ollama import chat  # Import here to avoid issues if not installed
+
             messages = [{"role": "user", "content": self.prompt_content}]
             ai_response = ""
             for chunk in chat(model=self.model, messages=messages, stream=True):
-                text = chunk['message']['content']
+                text = chunk["message"]["content"]
                 ai_response += text
                 self.chunk_ready.emit(text)
             self.finished.emit(ai_response)
@@ -52,13 +73,12 @@ class AIWorker(QThread):
             self.finished.emit(f"<b>Error:</b> {e}")
 
 
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Activity Tracker")
         self.setGeometry(100, 100, 1250, 800)
-        
+
         # Main widget and layout
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -101,7 +121,7 @@ class MainWindow(QMainWindow):
         self.year_combo.setCurrentText(str(current_year))
         self.year_combo.currentIndexChanged.connect(self.update_calendar_from_selector)
         self.year_combo.setStyleSheet(modern_combobox_style)
- 
+
         year_month_layout.addWidget(QLabel("Year:"))
         year_month_layout.addWidget(self.year_combo)
 
@@ -116,7 +136,9 @@ class MainWindow(QMainWindow):
         year_month_layout.addWidget(self.month_combo)
 
         button_layout.addWidget(year_month_widget)
-        button_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        button_layout.addItem(
+            QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        )
 
         btn = QPushButton("Chat with AI Coach")
         btn.setStyleSheet(modern_button_style)
@@ -124,10 +146,9 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(btn)
         self.plot_buttons["Chat with AI Coach"] = btn
 
-
         self.last_calendar_year = int(self.year_combo.currentText())
         self.last_calendar_month = self.month_combo.currentData()
-        self.last_calendar_mode = "last28"  
+        self.last_calendar_mode = "last28"
 
         # In your __init__ after other widgets
         if self.is_ollama_installed():
@@ -139,7 +160,9 @@ class MainWindow(QMainWindow):
                 button_layout.addWidget(QLabel("Ollama Model:"))
                 button_layout.addWidget(self.ollama_model_combo)
                 self.selected_ollama_model = models[0]
-                self.ollama_model_combo.currentTextChanged.connect(self.set_ollama_model)
+                self.ollama_model_combo.currentTextChanged.connect(
+                    self.set_ollama_model
+                )
             else:
                 button_layout.addWidget(QLabel("No Ollama models found."))
         else:
@@ -153,16 +176,12 @@ class MainWindow(QMainWindow):
         plot_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         main_layout.addWidget(plot_widget, stretch=1)
 
-        self.figure = plt.Figure(figsize=(9, 6)) 
+        self.figure = plt.Figure(figsize=(9, 6))
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.toolbar = NavigationToolbar(self.canvas, self)
         plot_layout.addWidget(self.toolbar)
-        plot_layout.addWidget(self.canvas,stretch=5)  # Larger plot area
-
-
-        
-
+        plot_layout.addWidget(self.canvas, stretch=5)  # Larger plot area
 
         # --- Bottom: AI Chat Console ---
         self.console = QTextEdit()
@@ -196,11 +215,12 @@ class MainWindow(QMainWindow):
     def is_ollama_installed(self):
         return shutil.which("ollama") is not None
 
-
     def get_ollama_models(self):
         for cmd in ["ollama", "ollama.exe"]:
             try:
-                result = subprocess.run([cmd, "list"], capture_output=True, text=True, check=True)
+                result = subprocess.run(
+                    [cmd, "list"], capture_output=True, text=True, check=True
+                )
                 models = []
                 for line in result.stdout.splitlines()[1:]:
                     if line.strip():
@@ -227,17 +247,25 @@ class MainWindow(QMainWindow):
             username = os.getenv("GARMIN_USERNAME")
             password = os.getenv("GARMIN_PASSWORD")
             if not username or not password:
-                raise ValueError("GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set.")
+                raise ValueError(
+                    "GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set."
+                )
 
             self.tracker = ActivityTracker(username, password)
 
             self.df_summary = self.tracker.sync_summary_data(use_api=use_api)
-            self.df_running = self.tracker.preprocess_running_data(self.df_summary.copy())
-            self.df_splits = self.tracker.sync_split_data(self.df_running, use_api=use_api)
+            self.df_running = self.tracker.preprocess_running_data(
+                self.df_summary.copy()
+            )
+            self.df_splits = self.tracker.sync_split_data(
+                self.df_running, use_api=use_api
+            )
             self.df_tss = self.tracker.calculate_tss(self.df_running)
 
         except Exception as e:
-            QMessageBox.critical(self, "Data Load Error", f"An error occurred while loading data:\n{e}")
+            QMessageBox.critical(
+                self, "Data Load Error", f"An error occurred while loading data:\n{e}"
+            )
             print(f"Error loading data: {e}")
         self.tracker = ActivityTracker(username, password)
 
@@ -245,7 +273,6 @@ class MainWindow(QMainWindow):
         self.df_running = self.tracker.preprocess_running_data(self.df_summary.copy())
         self.df_splits = self.tracker.sync_split_data(self.df_running, use_api=use_api)
         self.df_tss = self.tracker.calculate_tss(self.df_running)
-
 
     def clear_figure(self):
         self.figure.clear()
@@ -273,26 +300,24 @@ class MainWindow(QMainWindow):
         print("Splits button clicked")
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        plotSplits(self.df_splits, self.df_running,  ax)
+        plotSplits(self.df_splits, self.df_running, ax)
         self.plot_buttons["Back to Calendar"].show()
         self.canvas.draw()
-
-
 
     def plot_splits_for_activity(self, activity_id):
         self.clear_figure()
         ax = self.figure.add_subplot(111)
         # Filter splits for the selected activity
-        splits = self.df_splits[self.df_splits['activityId'] == activity_id]
-        activity = self.df_running[self.df_running['activityId'] == activity_id]
+        splits = self.df_splits[self.df_splits["activityId"] == activity_id]
+        activity = self.df_running[self.df_running["activityId"] == activity_id]
         self.plot_buttons["Back to Calendar"].show()
         if splits.empty:
-            ax.text(0.5, 0.5, "No splits found for this activity.", ha='center', va='center')
+            ax.text(
+                0.5, 0.5, "No splits found for this activity.", ha="center", va="center"
+            )
         else:
             plotSplits(self.df_splits, self.df_running, ax, activityId=activity_id)
         self.canvas.draw()
-
-
 
     def plot_calendar(self, year=None, month=None):
         if year is not None and month is not None:
@@ -305,16 +330,14 @@ class MainWindow(QMainWindow):
         ax = self.figure.add_subplot(111)
         self.calendar_dates = plot_calendar(self.df_running, ax, year=year, month=month)
         self.canvas.draw()
-        self.canvas.mpl_connect('button_press_event', self.on_calendar_click)
+        self.canvas.mpl_connect("button_press_event", self.on_calendar_click)
         self.plot_buttons["Back to Calendar"].hide()
-
 
     def update_calendar_from_selector(self):
         print("update_calendar_from_selector fired!")
         year = int(self.year_combo.currentText())
         month = self.month_combo.currentData()
         self.plot_calendar(year=year, month=month)
-
 
     def back_to_calendar(self):
         if getattr(self, "last_calendar_mode", "last28") == "month":
@@ -325,16 +348,18 @@ class MainWindow(QMainWindow):
                 if self.month_combo.itemData(i) == self.last_calendar_month:
                     self.month_combo.setCurrentIndex(i)
                     break
-            self.plot_calendar(year=self.last_calendar_year, month=self.last_calendar_month)
+            self.plot_calendar(
+                year=self.last_calendar_year, month=self.last_calendar_month
+            )
         else:
             # Restore the last 28 days view
             self.plot_calendar(year=None, month=None)
 
     def on_calendar_click(self, event):
         # Only respond if the calendar is currently shown
-        if not hasattr(self, 'calendar_dates') or self.calendar_dates is None:
+        if not hasattr(self, "calendar_dates") or self.calendar_dates is None:
             return
-    
+
         if event.inaxes and self.calendar_dates:
             # Find the closest (x, y) cell
             x, y = int(round(event.xdata)), int(round(event.ydata))
@@ -342,10 +367,9 @@ class MainWindow(QMainWindow):
             if clicked_date:
                 activity = self.df_running[self.df_running.index.date == clicked_date]
                 if not activity.empty:
-                    activity_id = activity.iloc[0]['activityId']
+                    activity_id = activity.iloc[0]["activityId"]
                     print(activity_id)
                     self.plot_splits_for_activity(activity_id)
-
 
     def initiateAIChat(self):
         print("Initiating AI Chat")
@@ -356,8 +380,10 @@ class MainWindow(QMainWindow):
 
         # Prepare prompt for AI
         prompt_content, _ = AI_format(self.df_running, self.df_splits, self.df_tss)
-        
-        formatted_response = f'<div style="white-space: pre-wrap;">{prompt_content}</div>'
+
+        formatted_response = (
+            f'<div style="white-space: pre-wrap;">{prompt_content}</div>'
+        )
         self.console.append(f"<b>You:</b> {formatted_response}")
         try:
             self.plot_buttons["Chat with AI Coach"].setStyleSheet(ai_running_style)
@@ -373,17 +399,16 @@ class MainWindow(QMainWindow):
             self.ai_worker.finished.connect(self.handle_ai_response)
             self.ai_worker.start()
 
+            # formatted_response = f'<div style="white-space: pre-wrap;">{ai_response}</div>'
 
-            #formatted_response = f'<div style="white-space: pre-wrap;">{ai_response}</div>'
-   
-            #self.console.append(f"<b>AI Coach:</b><br>{formatted_response}")
-            #self.conversation_history.append(f"AI Half Marathon Coach Response\n: {ai_response}\n") 
+            # self.console.append(f"<b>AI Coach:</b><br>{formatted_response}")
+            # self.conversation_history.append(f"AI Half Marathon Coach Response\n: {ai_response}\n")
         except Exception as e:
             self.console.append(f"<b>Error:</b> {e}")
-        #self.input_line.clear()
+        # self.input_line.clear()
 
         # Restore button style
-        #self.plot_buttons["Chat with AI Coach"].hide()
+        # self.plot_buttons["Chat with AI Coach"].hide()
 
     def continueAIChat(self):
         user_msg = self.input_line.text().strip()
@@ -398,8 +423,8 @@ class MainWindow(QMainWindow):
             self.plot_buttons["Chat with AI Coach"].show()
             self.plot_buttons["Chat with AI Coach"].setStyleSheet(ai_running_style)
             QApplication.processEvents()
-            print("prompt content = \n",prompt_content)
-            print("self.conversation_history = \n",self.conversation_history)
+            print("prompt content = \n", prompt_content)
+            print("self.conversation_history = \n", self.conversation_history)
 
             model = getattr(self, "selected_ollama_model", None)
 
@@ -411,17 +436,17 @@ class MainWindow(QMainWindow):
             self.ai_worker.finished.connect(self.handle_ai_response)
             self.ai_worker.start()
 
-            #formatted_response = f'<div style="white-space: pre-wrap;">{ai_response}</div>'
-            #self.console.append(f"<b>AI Coach:</b><br>{formatted_response}")
-            #self.conversation_history.append(f"AI Coach: {ai_response}") 
-            #print(ai_response)
+            # formatted_response = f'<div style="white-space: pre-wrap;">{ai_response}</div>'
+            # self.console.append(f"<b>AI Coach:</b><br>{formatted_response}")
+            # self.conversation_history.append(f"AI Coach: {ai_response}")
+            # print(ai_response)
 
         except Exception as e:
             self.console.append(f"<b>Error:</b> {e}")
-        #self.input_line.clear() 
+        # self.input_line.clear()
         # Restore button style
-        #self.plot_buttons["Chat with AI Coach"].setStyleSheet(modern_button_style)
-        #self.plot_buttons["Chat with AI Coach"].hide()
+        # self.plot_buttons["Chat with AI Coach"].setStyleSheet(modern_button_style)
+        # self.plot_buttons["Chat with AI Coach"].hide()
 
     def append_ai_chunk(self, text):
         self.ai_stream_buffer += text
@@ -439,13 +464,16 @@ class MainWindow(QMainWindow):
         self.plot_buttons["Chat with AI Coach"].setStyleSheet(modern_button_style)
         self.plot_buttons["Chat with AI Coach"].hide()
 
+
 def run_app():
     import sys
     from PyQt5.QtWidgets import QApplication
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
+
 
 if __name__ == "__main__":
     run_app()

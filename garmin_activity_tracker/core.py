@@ -9,14 +9,13 @@ import numpy as np
 import ast
 
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 SUMMARY_FILE = os.path.join(DATA_DIR, "garminSummaryData.xlsx")
 OLD_EXCEL_FILE = os.path.join(DATA_DIR, "Activities_Tracking_Before2017.xlsx")
 SPLITS_FILE = os.path.join(DATA_DIR, "garminSplitData.xlsx")
 
-
-class ActivityTracker:
+class ActivityTracker :
     def __init__(self, username, password):
         """
         Initialize the ActivityTracker object with Garmin credentials.
@@ -27,7 +26,7 @@ class ActivityTracker:
         """
         self.username = username
         self.password = password
-        # ensure_directory(DATA_DIR)
+        #ensure_directory(DATA_DIR)
         if not os.path.exists(DATA_DIR):
             os.makedirs(DATA_DIR)
 
@@ -45,27 +44,28 @@ class ActivityTracker:
         """
         if os.path.exists(SUMMARY_FILE):
             df_existing = pd.read_excel(SUMMARY_FILE)
-            if "startTimeLocal" in df_existing.columns:
-                df_existing["startTimeLocal"] = pd.to_datetime(
-                    df_existing["startTimeLocal"], errors="coerce"
-                )
-            # existing_ids = set(df_existing["activityId"].astype(str))
+            if 'startTimeLocal' in df_existing.columns:
+                df_existing['startTimeLocal'] = pd.to_datetime(df_existing['startTimeLocal'], errors='coerce')
+            #existing_ids = set(df_existing["activityId"].astype(str))
             existing_ids = set(
                 df_existing["activityId"]
-                .dropna()  # remove NaN
-                .astype(float)  # ensure float type first (if Excel added .0)
-                .astype(int)  # safely cast to int
-                .astype(str)  # convert to string
-            )
+                .dropna()                      # remove NaN
+                .astype(float)                # ensure float type first (if Excel added .0)
+                .astype(int)                  # safely cast to int
+                .astype(str)                  # convert to string
+)
         else:
             df_existing = pd.DataFrame()
             existing_ids = set()
+
+
 
         if not use_api:
             return df_existing
 
         client = Garmin(self.username, self.password)
         client.login()
+
 
         new_activities = []
         newActivitiesExist = False
@@ -79,37 +79,31 @@ class ActivityTracker:
                     print("Appending new activity with ID: {}".format(aid))
                     newActivitiesExist = True
                     new_activities.append(activity)
-                # else:
+                #else:
                 #    return pd.concat([pd.DataFrame(new_activities), df_existing], ignore_index=True)
 
-        df_combined = pd.concat(
-            [pd.DataFrame(new_activities), df_existing], ignore_index=True
-        )
+        df_combined = pd.concat([pd.DataFrame(new_activities), df_existing], ignore_index=True)
 
         if newActivitiesExist:
             df_combined.to_excel(SUMMARY_FILE, index=False)
 
-        if "df_combined" in locals():
+
+
+        if 'df_combined' in locals():
             outputVar = df_combined
         else:
             outputVar = df_existing
 
         if os.path.exists(OLD_EXCEL_FILE):
             df_old = pd.read_excel(OLD_EXCEL_FILE)
-            if "startTimeLocal" in df_old.columns:
-                df_old["startTimeLocal"] = pd.to_datetime(
-                    df_old["startTimeLocal"], errors="coerce"
-                )
+            if 'startTimeLocal' in df_old.columns:
+                df_old['startTimeLocal'] = pd.to_datetime(df_old['startTimeLocal'], errors='coerce')
             print(f"Loaded {len(df_old)} old activities from {OLD_EXCEL_FILE}.")
             df_combined = pd.concat([outputVar, df_old], ignore_index=True)
         else:
             print(f"No old Excel file found at {OLD_EXCEL_FILE}.")
 
-        print(
-            "Data synced with df_summary with length = {} records".format(
-                len(outputVar)
-            )
-        )
+        print("Data synced with df_summary with length = {} records".format(len(outputVar)))
         return outputVar
 
     def sync_split_data(self, df_summary, n=30000, use_api=True):
@@ -126,10 +120,8 @@ class ActivityTracker:
         """
         if os.path.exists(SPLITS_FILE):
             df_existing = pd.read_excel(SPLITS_FILE)
-            if "startTimeLocal" in df_existing.columns:
-                df_existing["startTimeLocal"] = pd.to_datetime(
-                    df_existing["startTimeLocal"], errors="coerce"
-                )
+            if 'startTimeLocal' in df_existing.columns:
+                df_existing['startTimeLocal'] = pd.to_datetime(df_existing['startTimeLocal'], errors='coerce')
             existing_ids = set(df_existing["activityId"].astype(str))
         else:
             df_existing = pd.DataFrame()
@@ -138,19 +130,18 @@ class ActivityTracker:
         if not use_api:
             return df_existing
 
+
         client = Garmin(self.username, self.password)
         client.login()
 
         new_splits = []
         df_summary = df_summary.reset_index()
-        df_summary["startTimeLocal"] = pd.to_datetime(
-            df_summary["startTimeLocal"], errors="coerce"
-        )
+        df_summary['startTimeLocal'] = pd.to_datetime(df_summary['startTimeLocal'], errors='coerce')
         df_sorted = df_summary.sort_values(by="startTimeLocal", ascending=False).head(n)
         if df_existing.empty:
             print("No summary data available to fetch splits.")
             for _, row in df_sorted.iterrows():
-
+                
                 try:
                     aid = str(int(row.get("activityId")))
                     print("Requested activityId {}".format(aid))
@@ -162,21 +153,19 @@ class ActivityTracker:
                 except Exception as e:
                     print(f"No existing file. Failed to get splits for {aid}: {e}")
                     pass
-            df_combined = pd.concat(
-                [pd.DataFrame(new_splits), df_existing], ignore_index=True
-            )
+            df_combined = pd.concat([pd.DataFrame(new_splits), df_existing], ignore_index=True)
             df_combined.to_excel(SPLITS_FILE, index=False)
 
             return df_existing
         else:
-
+            
             for _, row in df_sorted.iterrows():
 
                 try:
                     rowValue = row.get("activityId")
                     if pd.isna(rowValue):
                         print("Skipping NaN activityId")
-
+                        
                     else:
                         aid = str(int(rowValue))
                         if aid not in existing_ids:
@@ -186,15 +175,11 @@ class ActivityTracker:
                                 lap["activityId"] = aid
                                 new_splits.append(lap)
                 except Exception as e:
-                    print(
-                        f"Existing data file. Failed to get splits for {rowValue}: {e}"
-                    )
+                    print(f"Existing data file. Failed to get splits for {rowValue}: {e}")
                     pass
 
-            df_combined = pd.concat(
-                [pd.DataFrame(new_splits), df_existing], ignore_index=True
-            )
-
+            df_combined = pd.concat([pd.DataFrame(new_splits), df_existing], ignore_index=True)
+            
             if not new_splits:
                 print("No new splits found for the latest activities.")
             else:
@@ -202,86 +187,67 @@ class ActivityTracker:
                 df_combined.to_excel(SPLITS_FILE, index=False)
             return df_combined
 
-    def extract_typekey_list(self, series):
+    def extract_typekey_list(self,series):
         import ast
-
         result = []
         for index, entry in enumerate(series):
             if isinstance(entry, str):
                 try:
                     parsed = ast.literal_eval(entry)
-                    result.append(parsed.get("typeKey", None))
+                    result.append(parsed.get('typeKey', None))
                 except Exception as e:
                     print(f"Literal eval error at {index}: {e}")
                     result.append(None)
             elif isinstance(entry, dict):
-                result.append(entry.get("typeKey", None))
+                result.append(entry.get('typeKey', None))
             else:
                 print(f"Unknown type at {index}: {entry}")
                 result.append(None)
         return result
 
-    def estimate_rTSS_miles(
-        self,
-        distance_mi,
-        elevation_gain_ft,
-        elevation_loss_ft,
-        avg_pace_min_per_mi,
-        threshold_pace_min_per_mi=6.25,
-        gain_factor=0.0005,
-        loss_factor=0.00015,
-    ):
-        equiv_dist_mi = (
-            distance_mi
-            + (elevation_gain_ft * gain_factor)
-            + (elevation_loss_ft * loss_factor)
-        )
+    def estimate_rTSS_miles(self,distance_mi, elevation_gain_ft, elevation_loss_ft,
+                            avg_pace_min_per_mi, threshold_pace_min_per_mi = 6.25,
+                            gain_factor=0.0005, loss_factor=0.00015):
+        equiv_dist_mi = distance_mi + (elevation_gain_ft * gain_factor) + (elevation_loss_ft * loss_factor)
         duration_hr = equiv_dist_mi * avg_pace_min_per_mi / 60
         IF = threshold_pace_min_per_mi / avg_pace_min_per_mi
-        rTSS = duration_hr * (IF**2) * 100
+        rTSS = duration_hr * (IF ** 2) * 100
         return rTSS
 
     def preprocess_running_data(self, df):
-
-        activity_list = df["activityType"].tolist()
-
-        df["Type"] = self.extract_typekey_list(df["activityType"])
-        df["Race"] = self.extract_typekey_list(df["eventType"])
-
-        # event_list = df['eventType'].tolist()
-
-        df = df[(df["Type"].str.lower() == "running")].reset_index(drop=True)
+        
+        activity_list = df['activityType'].tolist()
+        
+        df['Type'] = self.extract_typekey_list(df['activityType'])
+        df['Race'] = self.extract_typekey_list(df['eventType'])
+        
+        #event_list = df['eventType'].tolist()
+        
+        df = df[(df['Type'].str.lower() == 'running')].reset_index(drop=True)
         Pace = []
         VO2 = []
         TSSArray = []
-        df["duration_str"] = df["duration"].apply(
-            lambda x: str(datetime.timedelta(seconds=int(x)))
-        )
-
-        df["startTimeLocal"] = pd.to_datetime(df["startTimeLocal"], errors="coerce")
-        df = df.set_index("startTimeLocal")
-        df["distance"] = df["distance"] * 0.00062137
+        df['duration_str'] = df['duration'].apply(lambda x: str(datetime.timedelta(seconds=int(x))))
+        
+        df['startTimeLocal'] = pd.to_datetime(df['startTimeLocal'], errors='coerce')
+        df = df.set_index('startTimeLocal')
+        df['distance'] = df['distance'] * 0.00062137
 
         for index, row in df.iterrows():
             try:
-                if isinstance(row["duration"], str):
-                    t = datetime.datetime.strptime(row["duration"], "%H:%M:%S")
-                # else:
+                if isinstance(row['duration'], str):
+                    t = datetime.datetime.strptime(row['duration'], '%H:%M:%S')
+                #else:
                 #    df['duration_str'] = df['duration'].apply(lambda x: str(datetime.timedelta(seconds=int(x))))
 
-                total_min = row["duration"] / 60
-                pace = total_min / row["distance"]
-                vo2 = (
-                    108.844
-                    - 0.1636 * (170 / 2.2)
-                    - (1.438 * pace)
-                    - (0.1928 * float(row["averageHR"]))
-                )
+                total_min = row['duration'] / 60
+                pace = total_min / row['distance']
+                vo2 = 108.844 - 0.1636 * (170 / 2.2) - (1.438 * pace) - (0.1928 * float(row['averageHR']))
                 TSS = self.estimate_rTSS_miles(
-                    distance_mi=row["distance"],
-                    elevation_gain_ft=row.get("elevationGain", 0),
-                    elevation_loss_ft=row.get("elevationLoss", 0),
-                    avg_pace_min_per_mi=pace,
+                    distance_mi=row['distance'],
+                    elevation_gain_ft=row.get('elevationGain', 0),
+                    elevation_loss_ft=row.get('elevationLoss', 0),
+                    avg_pace_min_per_mi=pace
                 )
                 Pace.append(pace)
                 VO2.append(vo2)
@@ -291,49 +257,42 @@ class ActivityTracker:
                 Pace.append(np.nan)
                 VO2.append(np.nan)
 
-        df["Avg Pace"] = Pace
-        df["Avg HR"] = df["averageHR"].astype(float)
-        df["Avg Cadence"] = df["maxDoubleCadence"].astype(float)
-        df["VO2"] = VO2
-        df["Velocity (m/s)"] = 1609.34 / (df["Avg Pace"] * 60)
-        df["TSS"] = TSSArray
+        df['Avg Pace'] = Pace
+        df['Avg HR'] = df['averageHR'].astype(float)
+        df['Avg Cadence'] = df['maxDoubleCadence'].astype(float)
+        df['VO2'] = VO2
+        df['Velocity (m/s)'] = 1609.34 / (df['Avg Pace'] * 60)
+        df['TSS'] = TSSArray    
         return df
 
     def calculate_tss(self, df):
         df_tss = df.reset_index()
-        df_tss = df_tss[["startTimeLocal", "TSS"]].copy()  # Extract TSS data
-        df_tss["startTimeLocal"] = pd.to_datetime(df_tss["startTimeLocal"]).dt.floor(
-            "D"
-        )
+        df_tss = df_tss[['startTimeLocal', 'TSS']].copy()  # Extract TSS data
+        df_tss['startTimeLocal'] = pd.to_datetime(df_tss['startTimeLocal']).dt.floor('D')
 
-        # df_tss = df_tss.groupby('startTimeLocal').sum().reset_index()  # combine if multiple runs per day
-        full_dates = pd.DataFrame(
-            {
-                "startTimeLocal": pd.date_range(
-                    df_tss["startTimeLocal"].min(), df_tss["startTimeLocal"].max()
-                )
-            }
-        )
-        df_daily = pd.merge(full_dates, df_tss, on="startTimeLocal", how="left")
-        df_daily["TSS"] = df_daily["TSS"].fillna(0.0)
+        #df_tss = df_tss.groupby('startTimeLocal').sum().reset_index()  # combine if multiple runs per day
+        full_dates = pd.DataFrame({'startTimeLocal': pd.date_range(df_tss['startTimeLocal'].min(), df_tss['startTimeLocal'].max())})
+        df_daily = pd.merge(full_dates, df_tss, on='startTimeLocal', how='left')
+        df_daily['TSS'] = df_daily['TSS'].fillna(0.0)
 
         CTL_CONST = 42
         ATL_CONST = 7
 
-        ctl = atl = df_daily.loc[0, "TSS"]
-        df_daily["ctl"] = 0.0
-        df_daily["atl"] = 0.0
-        df_daily["tsb"] = 0.0
+        ctl = atl = df_daily.loc[0, 'TSS']
+        df_daily['ctl'] = 0.0
+        df_daily['atl'] = 0.0
+        df_daily['tsb'] = 0.0
 
         for i in range(len(df_daily)):
-            tss_today = df_daily.loc[i, "TSS"]
+            tss_today = df_daily.loc[i, 'TSS']
             ctl += (tss_today - ctl) * (1 / CTL_CONST)
             atl += (tss_today - atl) * (1 / ATL_CONST)
             tsb = ctl - atl
-            df_daily.loc[i, "ctl"] = ctl
-            df_daily.loc[i, "atl"] = atl
-            df_daily.loc[i, "tsb"] = tsb
+            df_daily.loc[i, 'ctl'] = ctl
+            df_daily.loc[i, 'atl'] = atl
+            df_daily.loc[i, 'tsb'] = tsb
         return df_daily
+
 
     def _parse_activity_and_race_labels(self, df):
         """
@@ -345,7 +304,6 @@ class ActivityTracker:
         Returns:
             pd.DataFrame: DataFrame with 'Type' and 'Race' columns added.
         """
-
         def parse_entry(entry):
             if isinstance(entry, str):
                 try:
@@ -356,6 +314,6 @@ class ActivityTracker:
                 return entry.get("typeKey", None)
             return None
 
-        df["Type"] = df["activityType"].apply(parse_entry)
-        df["Race"] = df["eventType"].apply(parse_entry)
+        df['Type'] = df['activityType'].apply(parse_entry)
+        df['Race'] = df['eventType'].apply(parse_entry)
         return df

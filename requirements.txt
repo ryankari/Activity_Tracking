@@ -1,0 +1,8 @@
+pandas
+numpy
+matplotlib
+garminconnect
+openpyxl
+PyQt5
+ollama
+pytest

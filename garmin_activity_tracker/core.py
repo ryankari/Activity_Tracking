@@ -18,7 +18,7 @@ SPLITS_FILE = os.path.join(DATA_DIR, "garminSplitData.xlsx")
 class ActivityTracker :
     def __init__(self, username, password):
         """
-        Initialize the PyActivities object with Garmin credentials.
+        Initialize the ActivityTracker object with Garmin credentials.
 
         Args:
             username (str): Garmin Connect username.
@@ -43,7 +43,8 @@ class ActivityTracker :
         """
         if os.path.exists(SUMMARY_FILE):
             df_existing = pd.read_excel(SUMMARY_FILE)
-            
+            if 'startTimeLocal' in df_existing.columns:
+                df_existing['startTimeLocal'] = pd.to_datetime(df_existing['startTimeLocal'], errors='coerce')
             #existing_ids = set(df_existing["activityId"].astype(str))
             existing_ids = set(
                 df_existing["activityId"]
@@ -94,6 +95,8 @@ class ActivityTracker :
 
         if os.path.exists(OLD_EXCEL_FILE):
             df_old = pd.read_excel(OLD_EXCEL_FILE)
+            if 'startTimeLocal' in df_old.columns:
+                df_old['startTimeLocal'] = pd.to_datetime(df_old['startTimeLocal'], errors='coerce')
             print(f"Loaded {len(df_old)} old activities from {OLD_EXCEL_FILE}.")
             df_combined = pd.concat([outputVar, df_old], ignore_index=True)
         else:
@@ -116,6 +119,8 @@ class ActivityTracker :
         """
         if os.path.exists(SPLITS_FILE):
             df_existing = pd.read_excel(SPLITS_FILE)
+            if 'startTimeLocal' in df_existing.columns:
+                df_existing['startTimeLocal'] = pd.to_datetime(df_existing['startTimeLocal'], errors='coerce')
             existing_ids = set(df_existing["activityId"].astype(str))
         else:
             df_existing = pd.DataFrame()
@@ -129,6 +134,7 @@ class ActivityTracker :
         client.login()
 
         new_splits = []
+        df_summary['startTimeLocal'] = pd.to_datetime(df_summary['startTimeLocal'], errors='coerce')
         df_sorted = df_summary.sort_values(by="startTimeLocal", ascending=False).head(n)
         if df_existing.empty:
             print("No summary data available to fetch splits.")

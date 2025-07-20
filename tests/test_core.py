@@ -1,6 +1,6 @@
 import os
 import pytest
-from garmin_activity_tracker.core import PyActivities
+from garmin_activity_tracker.core import ActivityTracker
 
 @pytest.fixture
 def tracker():
@@ -8,7 +8,7 @@ def tracker():
     password = os.getenv("GARMIN_PASSWORD")
     if not username or not password:
         pytest.skip("GARMIN_USERNAME and GARMIN_PASSWORD must be set in environment")
-    return PyActivities(username, password)
+    return ActivityTracker(username, password)
 
 def test_sync_summary_data(tracker):
     df_summary = tracker.sync_summary_data()

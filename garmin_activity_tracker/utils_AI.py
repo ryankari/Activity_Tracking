@@ -13,6 +13,16 @@ import pandas as pd
 import numpy as np
 import datetime
 from jinja2 import Template
+import sys
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+# Now use resource_path when you need to access bundled files:
+PROMPT_TEMPLATE = resource_path('garmin_activity_tracker/prompt_template.txt')
 
 def AI_format(df, df_splits,df_tss,n=50):
     dfInput = df.head(n).copy().reset_index()
@@ -64,17 +74,28 @@ def AI_format(df, df_splits,df_tss,n=50):
     splits_summary = "\n".join(splitString)
 
     prompt_content = load_prompt_template(
-    "garmin_activity_tracker/prompt_template.txt",
+    PROMPT_TEMPLATE,
     currentTime=currentTime,
     csv_data=csv_data,
     splits_summary=splits_summary
     )            
 
+    if prompt_content is None:
+        # Instead of print, return a special error message
+        error_msg = (
+            "ERROR: Prompt template file not found at: {}\n"
+            "Please ensure 'prompt_template.txt' is present in the correct location."
+        ).format(PROMPT_TEMPLATE)
+        return error_msg, csv_data  # Or (None, None) if you want
 
     print("Prompt sent to Ollama:\n", prompt_content)
     return(prompt_content, csv_data)
 
 def load_prompt_template(template_path, **kwargs):
+    if not os.path.exists(template_path):
+        return None  # Or return a string with your error message
+
+    
     with open(template_path, 'r', encoding='utf-8') as f:
         template = Template(f.read())
     return template.render(**kwargs)

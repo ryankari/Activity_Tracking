@@ -389,7 +389,9 @@ class MainWindow(QMainWindow):
 
         # Prepare prompt for AI
         prompt_content, _ = AI_format(self.df_running, self.df_splits, self.df_tss)
-
+        if prompt_content.startswith("ERROR:"):
+            self.console.append(prompt_content)  # Or however you display messages
+            return  # Exit the function, don't proceed with AI call
         formatted_response = (
             f'<div style="white-space: pre-wrap;">{prompt_content}</div>'
         )

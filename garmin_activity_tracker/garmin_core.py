@@ -6,20 +6,33 @@ License: MIT
 Created: 2025-07-20
 """
 import os
+import sys
 import time
 import pandas as pd
 from garminconnect import Garmin
 import logging
 import datetime
 import numpy as np
+
 import ast
 
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+
+def get_base_path():
+    if getattr(sys, 'frozen', False):
+        # Running as a PyInstaller bundle
+        return os.path.dirname(sys.executable)
+    else:
+        # Running as a script
+        return os.path.dirname(os.path.abspath(__file__))
+
+BASE_PATH = get_base_path()
+DATA_DIR = os.path.join(BASE_PATH, "data")
+os.makedirs(DATA_DIR, exist_ok=True)  # Ensure the data directory exists
+
 SUMMARY_FILE = os.path.join(DATA_DIR, "garminSummaryData.xlsx")
-OLD_EXCEL_FILE = os.path.join(DATA_DIR, "Activities_Tracking_Before2017.xlsx")
 SPLITS_FILE = os.path.join(DATA_DIR, "garminSplitData.xlsx")
+OTHER_DATA_FILE = os.path.join(DATA_DIR, "OtherData.xlsx")
 
 class ActivityTracker :
     def __init__(self, username, password):
@@ -32,9 +45,7 @@ class ActivityTracker :
         """
         self.username = username
         self.password = password
-        #ensure_directory(DATA_DIR)
-        if not os.path.exists(DATA_DIR):
-            os.makedirs(DATA_DIR)
+
 
     def sync_summary_data(self, max_activities=3000, batch_size=100, use_api=True):
         """
@@ -63,6 +74,7 @@ class ActivityTracker :
         else:
             df_existing = pd.DataFrame()
             existing_ids = set()
+            use_api = True
 
 
 
@@ -99,14 +111,13 @@ class ActivityTracker :
         else:
             outputVar = df_existing
 
-        if os.path.exists(OLD_EXCEL_FILE):
-            df_old = pd.read_excel(OLD_EXCEL_FILE)
+        if os.path.exists(OTHER_DATA_FILE):
+            df_old = pd.read_excel(OTHER_DATA_FILE)
             if 'startTimeLocal' in df_old.columns:
                 df_old['startTimeLocal'] = pd.to_datetime(df_old['startTimeLocal'], errors='coerce')
-            print(f"Loaded {len(df_old)} old activities from {OLD_EXCEL_FILE}.")
+            print(f"Loaded {len(df_old)} old activities from {OTHER_DATA_FILE}.")
             df_combined = pd.concat([outputVar, df_old], ignore_index=True)
-        else:
-            print(f"No old Excel file found at {OLD_EXCEL_FILE}.")
+
 
         print("Data synced with df_summary with length = {} records".format(len(outputVar)))
         return outputVar

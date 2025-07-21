@@ -1,4 +1,10 @@
-# --- core.py ---
+"""
+Filename: core.py
+Description: Core logic for Garmin Activity Tracker - data sync, processing, and TSS calculations.
+Author: Ryan Kari
+License: MIT
+Created: 2025-07-20
+"""
 import os
 import time
 import pandas as pd
@@ -46,7 +52,7 @@ class ActivityTracker :
             df_existing = pd.read_excel(SUMMARY_FILE)
             if 'startTimeLocal' in df_existing.columns:
                 df_existing['startTimeLocal'] = pd.to_datetime(df_existing['startTimeLocal'], errors='coerce')
-            #existing_ids = set(df_existing["activityId"].astype(str))
+
             existing_ids = set(
                 df_existing["activityId"]
                 .dropna()                      # remove NaN
@@ -79,8 +85,7 @@ class ActivityTracker :
                     print("Appending new activity with ID: {}".format(aid))
                     newActivitiesExist = True
                     new_activities.append(activity)
-                #else:
-                #    return pd.concat([pd.DataFrame(new_activities), df_existing], ignore_index=True)
+
 
         df_combined = pd.concat([pd.DataFrame(new_activities), df_existing], ignore_index=True)
 
@@ -221,7 +226,6 @@ class ActivityTracker :
         df['Type'] = self.extract_typekey_list(df['activityType'])
         df['Race'] = self.extract_typekey_list(df['eventType'])
         
-        #event_list = df['eventType'].tolist()
         
         df = df[(df['Type'].str.lower() == 'running')].reset_index(drop=True)
         Pace = []
@@ -237,8 +241,7 @@ class ActivityTracker :
             try:
                 if isinstance(row['duration'], str):
                     t = datetime.datetime.strptime(row['duration'], '%H:%M:%S')
-                #else:
-                #    df['duration_str'] = df['duration'].apply(lambda x: str(datetime.timedelta(seconds=int(x))))
+
 
                 total_min = row['duration'] / 60
                 pace = total_min / row['distance']
@@ -270,7 +273,6 @@ class ActivityTracker :
         df_tss = df_tss[['startTimeLocal', 'TSS']].copy()  # Extract TSS data
         df_tss['startTimeLocal'] = pd.to_datetime(df_tss['startTimeLocal']).dt.floor('D')
 
-        #df_tss = df_tss.groupby('startTimeLocal').sum().reset_index()  # combine if multiple runs per day
         full_dates = pd.DataFrame({'startTimeLocal': pd.date_range(df_tss['startTimeLocal'].min(), df_tss['startTimeLocal'].max())})
         df_daily = pd.merge(full_dates, df_tss, on='startTimeLocal', how='left')
         df_daily['TSS'] = df_daily['TSS'].fillna(0.0)

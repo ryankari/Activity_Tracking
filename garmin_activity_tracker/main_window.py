@@ -1,7 +1,13 @@
+"""
+Filename: main_window.py
+Description: Main window for Garmin Activity Tracker - UI layout and interactions.
+Author: Ryan Kari
+License: MIT
+Created: 2025-07-20
+"""
+
 import sys
 import os
-
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from PyQt5.QtWidgets import (
     QApplication,
@@ -33,7 +39,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib
 
 matplotlib.use("Qt5Agg")
-from garmin_activity_tracker.core import ActivityTracker
+from garmin_activity_tracker.garmin_core import ActivityTracker
 from garmin_activity_tracker.plots import (
     plot_TSS,
     create_basic_metric_plot,
@@ -248,7 +254,10 @@ class MainWindow(QMainWindow):
             password = os.getenv("GARMIN_PASSWORD")
             if not username or not password:
                 raise ValueError(
-                    "GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set."
+                    "GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set.\n " \
+                    "Unable to authenticate with Garmin API and download new data.\n\n"
+                    "With Windows, via regedit, locate HKEY_CURRENT_USER\\Environment.\n"
+                    "Create new string value with name GARMIN_USERNAME and GARMIN_PASSWORD\n" \
                 )
 
             self.tracker = ActivityTracker(username, password)

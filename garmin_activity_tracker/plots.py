@@ -1,4 +1,10 @@
-# --- plots.py ---
+"""
+Filename: plots.py
+Description: Plotting functions for Garmin Activity Tracker - visualizations of activity data.
+Author: Ryan Kari
+License: MIT
+Created: 2025-07-20
+"""
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd

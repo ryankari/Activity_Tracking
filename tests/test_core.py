@@ -1,6 +1,14 @@
+"""
+Filename: test_core.py
+Description:    Unit tests for core functionality of Garmin Activity Tracker - testing data synchronization and processing.
+Author: Ryan Kari
+License: MIT
+Created: 2025-07-20
+"""
+
 import os
 import pytest
-from garmin_activity_tracker.core import ActivityTracker
+from garmin_activity_tracker.garmin_core import ActivityTracker
 
 @pytest.fixture
 def tracker():

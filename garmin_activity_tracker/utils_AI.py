@@ -1,3 +1,11 @@
+"""
+Filename: utils_AI.py
+Description:  Utility functions for AI interactions in Garmin Activity Tracker - formatting data and generating prompts.
+Author: Ryan Kari
+License: MIT
+Created: 2025-07-20
+"""
+
 from ollama import chat
 from ollama import ChatResponse
 import os

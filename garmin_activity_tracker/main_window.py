@@ -55,6 +55,29 @@ from garmin_activity_tracker.styles import (
     ai_running_style,
 )
 
+class LoadDataWorker(QThread):
+    progress = pyqtSignal(str)
+    finished = pyqtSignal(object, object, object)  # df_summary, df_running, df_splits
+
+    def __init__(self, tracker, use_api=False):
+        super().__init__()
+        self.tracker = tracker
+        self.use_api = use_api
+
+    def run(self):
+        try:
+            self.progress.emit("Syncing summary data...")
+            df_summary = self.tracker.sync_summary_data(use_api=self.use_api)
+            self.progress.emit("Preprocessing running data...")
+            df_running = self.tracker.preprocess_running_data(df_summary.copy())
+            self.progress.emit("Syncing split data...")
+            df_splits = self.tracker.sync_split_data(df_running, use_api=self.use_api)
+            self.progress.emit("Data load complete.")
+            self.finished.emit(df_summary, df_running, df_splits)
+        except Exception as e:
+            self.progress.emit(f"Error during data load: {e}")
+            self.finished.emit(None, None, None)
+
 
 class AIWorker(QThread):
     chunk_ready = pyqtSignal(str)
@@ -224,8 +247,8 @@ class MainWindow(QMainWindow):
         self.df_splits = None
         self.df_tss = None
         print(self.get_ollama_models())
-        self.load_data(use_api=False)
-        self.plot_calendar()
+        self.load_data_async(use_api=False)
+
 
     def is_ollama_installed(self):
         return shutil.which("ollama") is not None
@@ -252,9 +275,37 @@ class MainWindow(QMainWindow):
 
     def sync_latest_data(self):
         self.plot_buttons["Sync Latest Data"].setStyleSheet(ai_running_style)
-        print("Syncing latest data...")
         QApplication.processEvents()
-        self.load_data(use_api=True)
+        self.load_data_async(use_api=True)
+
+    def load_data_async(self, use_api=False):
+        username = os.getenv("GARMIN_USERNAME")
+        password = os.getenv("GARMIN_PASSWORD")
+        if not username or not password:
+            QMessageBox.critical(
+                self, "Credentials Error",
+                "GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set."
+            )
+            return
+
+        self.tracker = ActivityTracker(username, password)
+        self.console.append("Starting data load...")
+        self.load_worker = LoadDataWorker(self.tracker, use_api=use_api)
+        self.load_worker.progress.connect(self.console.append)
+        self.load_worker.finished.connect(self.handle_data_loaded)
+        self.load_worker.start()
+
+
+    def handle_data_loaded(self, df_summary, df_running, df_splits):
+        if df_summary is None:
+            self.console.append("Data load failed.")
+            return
+        self.df_summary = df_summary
+        self.df_running = df_running
+        self.df_splits = df_splits
+        self.console.append("Data loaded successfully.")
+        self.df_tss = self.tracker.calculate_tss(self.df_running)
+        self.plot_calendar(year=None, month=None)  # Default to last 28 days
         self.plot_buttons["Sync Latest Data"].setStyleSheet(modern_button_style)
 
     def load_data(self, use_api=False):
@@ -419,16 +470,9 @@ class MainWindow(QMainWindow):
             self.ai_worker.finished.connect(self.handle_ai_response)
             self.ai_worker.start()
 
-            # formatted_response = f'<div style="white-space: pre-wrap;">{ai_response}</div>'
-
-            # self.console.append(f"<b>AI Coach:</b><br>{formatted_response}")
-            # self.conversation_history.append(f"AI Half Marathon Coach Response\n: {ai_response}\n")
         except Exception as e:
             self.console.append(f"<b>Error:</b> {e}")
-        # self.input_line.clear()
 
-        # Restore button style
-        # self.plot_buttons["Chat with AI Coach"].hide()
 
     def continueAIChat(self):
         user_msg = self.input_line.text().strip()
@@ -456,17 +500,9 @@ class MainWindow(QMainWindow):
             self.ai_worker.finished.connect(self.handle_ai_response)
             self.ai_worker.start()
 
-            # formatted_response = f'<div style="white-space: pre-wrap;">{ai_response}</div>'
-            # self.console.append(f"<b>AI Coach:</b><br>{formatted_response}")
-            # self.conversation_history.append(f"AI Coach: {ai_response}")
-            # print(ai_response)
 
         except Exception as e:
             self.console.append(f"<b>Error:</b> {e}")
-        # self.input_line.clear()
-        # Restore button style
-        # self.plot_buttons["Chat with AI Coach"].setStyleSheet(modern_button_style)
-        # self.plot_buttons["Chat with AI Coach"].hide()
 
     def append_ai_chunk(self, text):
         self.ai_stream_buffer += text

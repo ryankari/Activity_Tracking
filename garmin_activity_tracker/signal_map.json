@@ -1,0 +1,7 @@
+{
+    "columns": {
+        "startTimeLocal": "startTimeLocal",
+        "otherStartTime": "startTimeLocal",
+        "activityId": "activityId"
+    }
+}

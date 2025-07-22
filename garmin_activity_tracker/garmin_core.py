@@ -13,7 +13,7 @@ from garminconnect import Garmin
 import logging
 import datetime
 import numpy as np
-
+import json
 import ast
 
 
@@ -46,6 +46,11 @@ class ActivityTracker :
         self.username = username
         self.password = password
 
+    def load_column_map(self,filename="signal_map.json"):
+        path = os.path.join(BASE_PATH, filename)
+        with open(path, "r", encoding="utf-8") as f:
+            mapping = json.load(f)
+        return mapping["columns"]
 
     def sync_summary_data(self, max_activities=3000, batch_size=100, use_api=True):
         """
@@ -59,13 +64,19 @@ class ActivityTracker :
         Returns:
             pd.DataFrame: Activity summary data.
         """
+        # Use mapped column names
+        column_map = self.load_column_map()  # Load mapping
+        col_start_time = column_map["startTimeLocal"]
+        other_start_time = column_map["otherStartTime"]
+        col_activity_id = column_map["activityId"]
+
         if os.path.exists(SUMMARY_FILE):
             df_existing = pd.read_excel(SUMMARY_FILE)
-            if 'startTimeLocal' in df_existing.columns:
-                df_existing['startTimeLocal'] = pd.to_datetime(df_existing['startTimeLocal'], errors='coerce')
+            if col_start_time in df_existing.columns:
+                df_existing[col_start_time] = pd.to_datetime(df_existing[col_start_time], errors='coerce')
 
             existing_ids = set(
-                df_existing["activityId"]
+                df_existing[col_activity_id]
                 .dropna()                      # remove NaN
                 .astype(float)                # ensure float type first (if Excel added .0)
                 .astype(int)                  # safely cast to int
@@ -92,7 +103,7 @@ class ActivityTracker :
             if not activities:
                 break
             for activity in activities:
-                aid = str(activity.get("activityId"))
+                aid = str(activity.get(col_activity_id))
                 if aid not in existing_ids:
                     print("Appending new activity with ID: {}".format(aid))
                     newActivitiesExist = True
@@ -104,19 +115,17 @@ class ActivityTracker :
         if newActivitiesExist:
             df_combined.to_excel(SUMMARY_FILE, index=False)
 
-
-
         if 'df_combined' in locals():
             outputVar = df_combined
         else:
             outputVar = df_existing
 
         if os.path.exists(OTHER_DATA_FILE):
-            df_old = pd.read_excel(OTHER_DATA_FILE)
-            if 'startTimeLocal' in df_old.columns:
-                df_old['startTimeLocal'] = pd.to_datetime(df_old['startTimeLocal'], errors='coerce')
-            print(f"Loaded {len(df_old)} old activities from {OTHER_DATA_FILE}.")
-            df_combined = pd.concat([outputVar, df_old], ignore_index=True)
+            df_other = pd.read_excel(OTHER_DATA_FILE)
+            if other_start_time in df_other.columns:
+                df_other[other_start_time] = pd.to_datetime(df_other[other_start_time], errors='coerce')
+            print(f"Loaded {len(df_other)} old activities from {OTHER_DATA_FILE}.")
+            df_combined = pd.concat([outputVar, df_other], ignore_index=True)
 
 
         print("Data synced with df_summary with length = {} records".format(len(outputVar)))
@@ -229,6 +238,7 @@ class ActivityTracker :
         IF = threshold_pace_min_per_mi / avg_pace_min_per_mi
         rTSS = duration_hr * (IF ** 2) * 100
         return rTSS
+
 
     def preprocess_running_data(self, df):
         

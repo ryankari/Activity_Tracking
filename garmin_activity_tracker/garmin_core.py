@@ -48,9 +48,13 @@ class ActivityTracker :
 
     def load_column_map(self,filename="signal_map.json"):
         path = os.path.join(BASE_PATH, filename)
-        with open(path, "r", encoding="utf-8") as f:
-            mapping = json.load(f)
-        return mapping["columns"]
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                mapping = json.load(f)
+            return mapping["columns"]
+        except Exception as e:
+            logging.error(f"Error loading signal_map.json: {e}")
+            return {}
 
     def sync_summary_data(self, max_activities=3000, batch_size=100, use_api=True):
         """
@@ -143,11 +147,16 @@ class ActivityTracker :
         Returns:
             pd.DataFrame: Combined split data.
         """
+        column_map = self.load_column_map()  # Load mapping
+        col_start_time = column_map["startTimeLocal"]
+        other_start_time = column_map["otherStartTime"]
+        col_activity_id = column_map["activityId"]
+
         if os.path.exists(SPLITS_FILE):
             df_existing = pd.read_excel(SPLITS_FILE)
-            if 'startTimeLocal' in df_existing.columns:
-                df_existing['startTimeLocal'] = pd.to_datetime(df_existing['startTimeLocal'], errors='coerce')
-            existing_ids = set(df_existing["activityId"].astype(str))
+            if col_start_time in df_existing.columns:
+                df_existing[col_start_time] = pd.to_datetime(df_existing[col_start_time], errors='coerce')
+            existing_ids = set(df_existing[col_activity_id].astype(str))
         else:
             df_existing = pd.DataFrame()
             existing_ids = set()
@@ -161,19 +170,19 @@ class ActivityTracker :
 
         new_splits = []
         df_summary = df_summary.reset_index()
-        df_summary['startTimeLocal'] = pd.to_datetime(df_summary['startTimeLocal'], errors='coerce')
-        df_sorted = df_summary.sort_values(by="startTimeLocal", ascending=False).head(n)
+        df_summary[col_start_time] = pd.to_datetime(df_summary[col_start_time], errors='coerce')
+        df_sorted = df_summary.sort_values(by=col_start_time, ascending=False).head(n)
         if df_existing.empty:
             print("No summary data available to fetch splits.")
             for _, row in df_sorted.iterrows():
                 
                 try:
-                    aid = str(int(row.get("activityId")))
+                    aid = str(int(row.get(col_activity_id )))
                     print("Requested activityId {}".format(aid))
                     details = client.get_activity_splits(aid)
                     print("New splits found for activityId {}".format(aid))
                     for lap in details.get("lapDTOs", []):
-                        lap["activityId"] = aid
+                        lap[col_activity_id ] = aid
                         new_splits.append(lap)
                 except Exception as e:
                     print(f"No existing file. Failed to get splits for {aid}: {e}")
@@ -187,7 +196,7 @@ class ActivityTracker :
             for _, row in df_sorted.iterrows():
 
                 try:
-                    rowValue = row.get("activityId")
+                    rowValue = row.get(col_activity_id )
                     if pd.isna(rowValue):
                         print("Skipping NaN activityId")
                         
@@ -197,7 +206,7 @@ class ActivityTracker :
                             print("Requested activityId {}".format(aid))
                             details = client.get_activity_splits(int(aid))
                             for lap in details.get("lapDTOs", []):
-                                lap["activityId"] = aid
+                                lap[col_activity_id] = aid
                                 new_splits.append(lap)
                 except Exception as e:
                     print(f"Existing data file. Failed to get splits for {rowValue}: {e}")
@@ -230,6 +239,7 @@ class ActivityTracker :
                 result.append(None)
         return result
 
+#***
     def estimate_rTSS_miles(self,distance_mi, elevation_gain_ft, elevation_loss_ft,
                             avg_pace_min_per_mi, threshold_pace_min_per_mi = 6.25,
                             gain_factor=0.0005, loss_factor=0.00015):

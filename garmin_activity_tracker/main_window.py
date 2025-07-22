@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QSpacerItem,
 )
-from PyQt5.QtWidgets import QComboBox, QHBoxLayout,QApplication
+from PyQt5.QtWidgets import QComboBox, QHBoxLayout,QApplication, QInputDialog
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtGui import QFont
 
@@ -66,14 +66,29 @@ class LoadDataWorker(QThread):
 
     def run(self):
         try:
-            self.progress.emit("Syncing summary data...")
-            df_summary = self.tracker.sync_summary_data(use_api=self.use_api)
-            self.progress.emit("Preprocessing running data...")
-            df_running = self.tracker.preprocess_running_data(df_summary.copy())
-            self.progress.emit("Syncing split data...")
-            df_splits = self.tracker.sync_split_data(df_running, use_api=self.use_api)
+            self.tracker.load_column_map()
+            if self.use_api==False: 
+                self.progress.emit("Loading local data without API...")
+            else:
+                self.progress.emit("Loading data from Garmin API...")     
+            self.df_summary = self.tracker.sync_summary_data(use_api=self.use_api)
+        except Exception as e:
+            self.progress.emit(f"Error during sync summary or with signal_map.json: {e}")
+            self.finished.emit(None, None, None)
+            return
+        try:
+            self.progress.emit("Preprocessing local running data...")
+            self.df_running = self.tracker.preprocess_running_data(self.df_summary.copy())
+        except Exception as e:
+            self.progress.emit(f"Error during preprocessing: {e}")
+            self.finished.emit(None, None, None)
+            return
+        try:
+            self.progress.emit("Syncing local split data...")
+            self.df_splits = self.tracker.sync_split_data(self.df_running, use_api=self.use_api)
             self.progress.emit("Data load complete.")
-            self.finished.emit(df_summary, df_running, df_splits)
+            self.progress.emit("Press Sync Latest Data to download new data.")
+            self.finished.emit(self.df_summary, self.df_running, self.df_splits)
         except Exception as e:
             self.progress.emit(f"Error during data load: {e}")
             self.finished.emit(None, None, None)
@@ -133,6 +148,7 @@ class MainWindow(QMainWindow):
             btn = QPushButton(label)
             btn.setStyleSheet(modern_button_style)
             btn.clicked.connect(func)
+            btn.setEnabled(False)
             button_layout.addWidget(btn)
             self.plot_buttons[label] = btn
 
@@ -252,6 +268,20 @@ class MainWindow(QMainWindow):
 
     def is_ollama_installed(self):
         return shutil.which("ollama") is not None
+    
+    def get_garmin_credentials(self):
+        username = os.getenv("GARMIN_USERNAME")
+        password = os.getenv("GARMIN_PASSWORD")
+        if not username:
+            username, ok = QInputDialog.getText(self, "Garmin Username", "Enter your Garmin username:")
+            if not ok or not username:
+                return None, None
+        if not password:
+            password, ok = QInputDialog.getText(self, "Garmin Password", "Enter your Garmin password:", QLineEdit.Password)
+            if not ok or not password:
+                return None, None
+        return username, password
+
 
     def get_ollama_models(self):
         for cmd in ["ollama", "ollama.exe"]:
@@ -279,16 +309,21 @@ class MainWindow(QMainWindow):
         self.load_data_async(use_api=True)
 
     def load_data_async(self, use_api=False):
-        username = os.getenv("GARMIN_USERNAME")
-        password = os.getenv("GARMIN_PASSWORD")
-        if not username or not password:
-            QMessageBox.critical(
-                self, "Credentials Error",
-                "GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set."
-            )
-            return
 
-        self.tracker = ActivityTracker(username, password)
+
+        if use_api:
+            username, password = self.get_garmin_credentials()
+            if not username or not password:
+                QMessageBox.critical(
+                    self, "Credentials Error",
+                    "GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set."
+                )
+                return
+            self.tracker = ActivityTracker(username, password)
+        else:
+            # Credentials not needed for local-only mode
+            self.tracker = ActivityTracker(None, None)
+
         self.console.append("Starting data load...")
         self.load_worker = LoadDataWorker(self.tracker, use_api=use_api)
         self.load_worker.progress.connect(self.console.append)
@@ -303,45 +338,11 @@ class MainWindow(QMainWindow):
         self.df_summary = df_summary
         self.df_running = df_running
         self.df_splits = df_splits
-        self.console.append("Data loaded successfully.")
         self.df_tss = self.tracker.calculate_tss(self.df_running)
         self.plot_calendar(year=None, month=None)  # Default to last 28 days
         self.plot_buttons["Sync Latest Data"].setStyleSheet(modern_button_style)
-
-    def load_data(self, use_api=False):
-        try:
-            username = os.getenv("GARMIN_USERNAME")
-            password = os.getenv("GARMIN_PASSWORD")
-            if not username or not password:
-                raise ValueError(
-                    "GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set.\n " \
-                    "Unable to authenticate with Garmin API and download new data.\n\n"
-                    "With Windows, via regedit, locate HKEY_CURRENT_USER\\Environment.\n"
-                    "Create new string value with name GARMIN_USERNAME and GARMIN_PASSWORD\n" \
-                )
-
-            self.tracker = ActivityTracker(username, password)
-
-            self.df_summary = self.tracker.sync_summary_data(use_api=use_api)
-            self.df_running = self.tracker.preprocess_running_data(
-                self.df_summary.copy()
-            )
-            self.df_splits = self.tracker.sync_split_data(
-                self.df_running, use_api=use_api
-            )
-            self.df_tss = self.tracker.calculate_tss(self.df_running)
-
-        except Exception as e:
-            QMessageBox.critical(
-                self, "Data Load Error", f"An error occurred while loading data:\n{e}"
-            )
-            print(f"Error loading data: {e}")
-        self.tracker = ActivityTracker(username, password)
-
-        self.df_summary = self.tracker.sync_summary_data(use_api=use_api)
-        self.df_running = self.tracker.preprocess_running_data(self.df_summary.copy())
-        self.df_splits = self.tracker.sync_split_data(self.df_running, use_api=use_api)
-        self.df_tss = self.tracker.calculate_tss(self.df_running)
+        for btn in self.plot_buttons.values():
+            btn.setEnabled(True)
 
     def clear_figure(self):
         self.figure.clear()

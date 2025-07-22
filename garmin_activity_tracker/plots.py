@@ -128,7 +128,7 @@ def plot_calendar(dfRunning, ax, year=None, month=None):
     Each activity is a circle sized by distance, races in red, others in skyblue.
     Handles months with more than 28 days.
     """
-    datePosition = -0.32
+    datePosition = -0.36
     trainingEffectLength = 12
     cell_to_date = {}  # (x, y) -> date
     if year is not None and month is not None:

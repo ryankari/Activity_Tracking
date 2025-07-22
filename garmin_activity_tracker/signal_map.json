@@ -2,6 +2,14 @@
     "columns": {
         "startTimeLocal": "startTimeLocal",
         "otherStartTime": "startTimeLocal",
-        "activityId": "activityId"
+        "activityId": "activityId",
+        "elevationGain": "elevationGain",
+        "elevationLoss": "elevationLoss",
+        "averageHR": "averageHR",
+        "maxHR": "maxHR",
+        "distance": "distance",
+        "maxDoubleCadence": "maxDoubleCadence"
     }
 }
+
+

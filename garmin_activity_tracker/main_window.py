@@ -23,8 +23,9 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QSpacerItem,
 )
-from PyQt5.QtWidgets import QComboBox, QHBoxLayout
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtWidgets import QComboBox, QHBoxLayout,QApplication
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtGui import QFont
 
 import datetime
 import calendar
@@ -193,6 +194,14 @@ class MainWindow(QMainWindow):
         self.console = QTextEdit()
         self.console.setReadOnly(True)
         self.console.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        
+        dpi = QApplication.primaryScreen().logicalDotsPerInch()
+        scale = dpi / 96.0  # 96 DPI is standard
+
+        font = QFont()
+        font.setPointSizeF(10 * scale)  # Base size 10, scaled
+        self.console.setFont(font)
+
         self.conversation_history = []
 
         self.input_line = QLineEdit()
@@ -479,8 +488,17 @@ class MainWindow(QMainWindow):
 def run_app():
     import sys
     from PyQt5.QtWidgets import QApplication
-
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     app = QApplication(sys.argv)
+    screen = app.primaryScreen()
+    dpi = screen.logicalDotsPerInch()  # Typically 96 for normal screens
+
+    # Set base font size relative to 96 dpi
+    scale_factor = dpi / 96.0
+    font = app.font()
+    font.setPointSizeF(10 * scale_factor)
+    app.setFont(font)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())

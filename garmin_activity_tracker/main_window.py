@@ -429,17 +429,44 @@ class MainWindow(QMainWindow):
         # Only respond if the calendar is currently shown
         if not hasattr(self, "calendar_dates") or self.calendar_dates is None:
             return
-
-        if event.inaxes and self.calendar_dates:
-            # Find the closest (x, y) cell
+    
+        if event.inaxes and self.calendar_dates:   
             x, y = int(round(event.xdata)), int(round(event.ydata))
             clicked_date = self.calendar_dates.get((x, y))
             if clicked_date:
-                activity = self.df_running[self.df_running.index.date == clicked_date]
-                if not activity.empty:
-                    activity_id = activity.iloc[0]["activityId"]
+                activities = self.df_running[self.df_running.index.date == clicked_date]
+                if not activities.empty:
+                    if len(activities) == 1:
+                        activity_id = activities.iloc[0]["activityId"]
+                    else:
+                        # Let user pick which activity
+
+                        item, ok = QInputDialog.getItem(
+                            self,
+                            "Select Activity",
+                            "Multiple activities found for this date. Choose one:",
+                            activities['activityName'].values,
+                            0,
+                            False,
+                        )
+                        if not ok or not item:
+                            return
+                        # Extract activityId from the selected string
+                        activity_id = activities[activities['activityName'] == item]['activityId'].values[0]
                     print(activity_id)
                     self.plot_splits_for_activity(activity_id)
+        # if event.inaxes and self.calendar_dates:
+        #     # Find the closest (x, y) cell
+        #     x, y = int(round(event.xdata)), int(round(event.ydata))
+        #     clicked_date = self.calendar_dates.get((x, y))
+        #     if clicked_date:
+        #         activity = self.df_running[self.df_running.index.date == clicked_date]
+        #         if not activity.empty:
+        #             activity_id = activity.iloc[0]["activityId"]
+        #             print(activity_id)
+        #             self.plot_splits_for_activity(activity_id)
+
+
 
     def initiateAIChat(self):
         print("Initiating AI Chat")

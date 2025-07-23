@@ -315,8 +315,16 @@ def plotSplits(df_splits, df_running, ax, activityId=None):
             ha='center', va='top', rotation=90, fontsize=9)
 
     ax.invert_yaxis()
-    ax.set_ylim(4, 10)  # Keep this so your axis still reflects your preferred orientation
 
+    distance = str(np.round(df_running[df_running['activityId'] == activity_id]['distance'].values[0],1))
+    Pace = str(np.round(df_running[df_running['activityId'] == activity_id]['Avg Pace'].values[0],1))
+    time = (df_running[df_running['activityId'] == activity_id]['duration_str'].values[0])
+    elevationGain = str(np.round(df_running[df_running['activityId'] == activity_id]['elevationGain'].values[0]*3.28,1))
+    metricStr = time + "\n" + distance + " mi\n" + Pace + " min/mi\n" + elevationGain + " ft"
+
+    ax.set_ylim(4, 10)  # Keep this so your axis still reflects your preferred orientation
+    ax.text(0.01,0.99, metricStr, transform=ax.transAxes, fontsize=12,
+            verticalalignment='top', horizontalalignment='left',bbox=dict(boxstyle='round',facecolor='wheat', alpha=0.5))
     ax.set_xlabel('Distance (miles)')
     ax.set_ylabel('Time (min/mile)')
     activityName = df_running[df_running['activityId'] == activity_id]['activityName'].astype(str).values[0]

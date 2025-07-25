@@ -96,7 +96,7 @@ def plot_race_performance(df_summary,ax):
         ax.text(item[0], item[1]['Avg Pace'] + delta, item[1]['activityName'][:20], rotation=90, fontsize=8)
         previous_date = item[0]
 
-    ax.title('Race Outcomes')
+    #ax.set_title('Race Outcomes')
     ax.grid(True)
     ax.set_ylabel('min/mi')
     ax.set_xlabel('Event Index')
@@ -272,7 +272,7 @@ def plotSplits(df_splits, df_running, ax, activityId=None):
         activity_id = activityId
         
     print(f"Latest activity ID: {activity_id}")
-    latest_splits = df_splits[df_splits['activityId'] == activity_id]
+    latest_splits = df_splits[df_splits['activityId'].astype(str) == str(activity_id)]
 
     # Sort by split number if needed (assumes 'lapIndex' or similar exists)
     latest_splits = latest_splits.sort_values(by='lapIndex') if 'lapIndex' in latest_splits else latest_splits

@@ -47,6 +47,7 @@ from garmin_activity_tracker.plots import (
     createAdvancedMetricPlot,
     plotSplits,
     plot_calendar,
+    plot_race_performance
 )
 from garmin_activity_tracker.utils_AI import get_response, AI_format
 from garmin_activity_tracker.styles import (
@@ -141,6 +142,7 @@ class MainWindow(QMainWindow):
             ("Basic Metrics", self.plot_basic_metrics),
             ("Advanced Metrics", self.plot_advanced_metrics),
             ("TSS", self.plot_tss),
+            ("Plot Races", self.plot_races),
             ("Calendar", self.plot_calendar),
             ("Sync Latest Data", self.sync_latest_data),
             ("Back to Calendar", self.back_to_calendar),
@@ -378,8 +380,8 @@ class MainWindow(QMainWindow):
         self.clear_figure()
         ax = self.figure.add_subplot(111)
         # Filter splits for the selected activity
-        splits = self.df_splits[self.df_splits["activityId"] == activity_id]
-        activity = self.df_running[self.df_running["activityId"] == activity_id]
+        splits = self.df_splits[self.df_splits["activityId"].astype(str)  == str(activity_id)]
+        activity = self.df_running[self.df_running["activityId"].astype(str)  == str(activity_id)]
         self.plot_buttons["Back to Calendar"].show()
         if splits.empty:
             ax.text(
@@ -388,6 +390,13 @@ class MainWindow(QMainWindow):
         else:
             plotSplits(self.df_splits, self.df_running, ax, activityId=activity_id)
         self.canvas.draw()
+
+    def plot_races(self):
+        self.clear_figure()
+        ax = self.figure.add_subplot(111)
+        plot_race_performance(self.df_running, ax)
+        self.canvas.draw()
+        
 
     def plot_calendar(self, year=None, month=None):
         if year is not None and month is not None:
@@ -471,7 +480,10 @@ class MainWindow(QMainWindow):
     def initiateAIChat(self):
         print("Initiating AI Chat")
         # Example usage in your AI call
-
+        
+        # Clear console and chat history
+        self.console.clear()
+        self.conversation_history = []
         user_msg = self.input_line.text().strip()
         self.conversation_history.append(f"User: {user_msg}")
 

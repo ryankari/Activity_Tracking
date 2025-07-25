@@ -76,6 +76,8 @@ class ActivityTracker :
 
         if os.path.exists(SUMMARY_FILE):
             df_existing = pd.read_excel(SUMMARY_FILE)
+            df_existing = df_existing.dropna(subset=['activityId'])
+            df_existing['activityId'] = df_existing['activityId'].astype(int)
             if col_start_time in df_existing.columns:
                 df_existing[col_start_time] = pd.to_datetime(df_existing[col_start_time], errors='coerce')
 

@@ -48,12 +48,15 @@ def AI_format(df, df_splits,df_tss,n=50):
     dfTemp = pd.DataFrame({})
     for latest_id in latest_ids:
         print(f"Latest activity ID: {latest_id}")
-        latest_splits = df_splits[df_splits['activityId'] == latest_id]
+        latest_splits = df_splits[df_splits['activityId'].astype(str) == str(latest_id)]
         date_obj = df[df['activityId'] == latest_id].index[0].date()
         dfTemp = latest_splits[['duration','distance']]*np.array((1/60, 0.00062137))
         dfTemp['Date'] = date_obj.strftime('%Y-%m-%d')
         dfTemp['Pace [min per mile]'] = dfTemp['duration'] / dfTemp['distance']
-        dfTemp['Pace [mi/hr]'] = dfTemp['distance'] / dfTemp['duration']*60
+        #dfTemp['Pace [mi/hr]'] = dfTemp['distance'] / dfTemp['duration']*60
+        #dfTemp['Elevation Gain [ft]'] = latest_splits['elevationGain']
+        #dfTemp['Elevation Loss [ft]'] = latest_splits['elevationLoss']
+        dfTemp['Elevation Gain [ft]'] = (latest_splits['elevationGain'] - latest_splits['elevationLoss'])*3.28084  # Convert meters to feet
         dfTemp['Average HR'] = latest_splits['averageHR']
         splitSimple = pd.concat([splitSimple, dfTemp], ignore_index=True)
     splitSimple = splitSimple.rename(columns={'duration':'duration [min]'})

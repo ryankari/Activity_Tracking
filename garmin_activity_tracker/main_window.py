@@ -558,7 +558,7 @@ class MainWindow(QMainWindow):
         self.conversation_history.append(f"AI Coach: {ai_response}")
         self.input_line.clear()
         self.plot_buttons["Chat with AI Coach"].setStyleSheet(modern_button_style)
-        self.plot_buttons["Chat with AI Coach"].hide()
+        #self.plot_buttons["Chat with AI Coach"].hide()
 
 
 def run_app():

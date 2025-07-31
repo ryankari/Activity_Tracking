@@ -1,0 +1,36 @@
+{
+    "api": {
+        "max_activities": 3000,
+        "batch_size": 100,
+        "default_use_api": false
+    },
+    "files": {
+        "summary_file": "garminSummaryData.xlsx",
+        "splits_file": "garminSplitData.xlsx",
+        "other_data_file": "OtherData.xlsx"
+    },
+    "calendarplot": {
+        "default_plot_style": "modern",
+        "calendar_days_shown": 28,
+        "font_size": 10,
+        "datePosition": -0.36,
+        "trainingEffectLength":12
+    },
+    "tss": {
+        "threshold_pace_min_per_mi": 6.25,
+        "gain_factor": 0.0005,
+        "loss_factor": 0.00015,
+        "ctl_const": 42,
+        "atl_const": 7
+    },
+    "plotting": {
+        "font_size": 10,
+        "line_width": 2,
+        "marker_size": 5,
+        "split_threshold":7.0,
+        "race_ylim_min": 6,
+        "race_ylim_max": 10.0,
+        "split_ylim_min": 4,
+        "split_ylim_max": 10
+    }
+}

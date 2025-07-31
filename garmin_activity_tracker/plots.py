@@ -78,7 +78,7 @@ def createAdvancedMetricPlot(df, ax, show_trend=True):
     ax[2].xaxis.set_major_locator(mdates.YearLocator(1))
     ax[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
 
-def plot_race_performance(df_summary,ax):
+def plot_race_performance(df_summary,ax,config=None):
     if 'Race' not in df_summary.columns or 'Avg Pace' not in df_summary.columns:
         print("Race or Avg Pace data not available.")
         return
@@ -100,7 +100,9 @@ def plot_race_performance(df_summary,ax):
     ax.grid(True)
     ax.set_ylabel('min/mi')
     ax.set_xlabel('Event Index')
-    ax.set_ylim([6, 9.5])
+    min = float(config.get("plotting", {}).get("race_ylim_min", 4.0))
+    max = float(config.get("plotting", {}).get("race_ylim_max", 10.0))
+    ax.set_ylim([min, max])
     #plt.legend()
     #ax.tight_layout()
     #plt.show()
@@ -122,14 +124,15 @@ def distance_to_size(distance, min_dist=2, max_dist=13, min_size=200, max_size=1
     return sizeOutput
 
 
-def plot_calendar(dfRunning, ax, year=None, month=None):
+def plot_calendar(dfRunning, ax, config,year=None, month=None):
     """
     Plots a calendar-style grid for a selected month (or last 4 weeks if no month/year given).
     Each activity is a circle sized by distance, races in red, others in skyblue.
     Handles months with more than 28 days.
     """
-    datePosition = -0.36
-    trainingEffectLength = 12
+    datePosition = float(config.get("calendarplot", {}).get("datePosition"))
+
+    trainingEffectLength = int(config.get("calendarplot", {}).get("trainingEffectLength"))
     cell_to_date = {}  # (x, y) -> date
     if year is not None and month is not None:
         # Month calendar grid
@@ -202,7 +205,8 @@ def plot_calendar(dfRunning, ax, year=None, month=None):
         start_date = end_date - pd.Timedelta(days=27)
         df_4w = dfRunning[(dfRunning.index >= start_date) & (dfRunning.index < end_date + pd.Timedelta(days=1))].copy()
         df_4w['date'] = df_4w.index.date
-        all_dates = [end_date - pd.Timedelta(days=x) for x in reversed(range(28))]
+        days = config.get("calendarplot", {}).get("calendar_days_shown")
+        all_dates = [end_date - pd.Timedelta(days=x) for x in reversed(range(days))]
         all_dates = [d.date() for d in all_dates]
         n_weeks = 4
         #fig, ax = plt.subplots(figsize=(14, 2.5 * n_weeks))
@@ -257,7 +261,7 @@ def plot_calendar(dfRunning, ax, year=None, month=None):
     return cell_to_date
 
 
-def plotSplits(df_splits, df_running, ax, activityId=None):
+def plotSplits(df_splits, df_running, ax, activityId=None, config=None):
     """
     Plots splits from the latest run.
     """
@@ -295,7 +299,9 @@ def plotSplits(df_splits, df_running, ax, activityId=None):
     pace =  (durations/60) / distances
     #ax.bar(lefts, pace, width=bar_widths, align='edge', color='skyblue', edgecolor='k',bottom=10)
 
-    colors = ['tomato' if p < 7 else 'skyblue' for p in pace]
+    threshold = float(config.get("plotting", {}).get("split_threshold", 7.0))
+
+    colors = ['tomato' if p < threshold else 'skyblue' for p in pace]
 
 
 
@@ -322,7 +328,15 @@ def plotSplits(df_splits, df_running, ax, activityId=None):
     elevationGain = str(np.round(df_running[df_running['activityId'] == activity_id]['elevationGain'].values[0]*3.28,1))
     metricStr = time + "\n" + distance + " mi\n" + Pace + " min/mi\n" + elevationGain + " ft"
 
-    ax.set_ylim(4, 10)  # Keep this so your axis still reflects your preferred orientation
+    
+    min = float(config.get("plotting", {}).get("split_ylim_min", 4.0))
+    max = float(config.get("plotting", {}).get("split_ylim_max", 10.0))
+
+    #ax.set_ylim(max, min)  # Keep this so your axis still reflects your preferred orientation
+    print(f"Setting y-axis limits to {min} - {max}")
+
+    ax.set_ylim(min, max)  # Keep this so your axis still reflects your preferred orientation
+
     ax.text(0.01,0.99, metricStr, transform=ax.transAxes, fontsize=12,
             verticalalignment='top', horizontalalignment='left',bbox=dict(boxstyle='round',facecolor='wheat', alpha=0.5))
     ax.set_xlabel('Distance (miles)')
@@ -331,7 +345,6 @@ def plotSplits(df_splits, df_running, ax, activityId=None):
   
     ax.set_title('Splits from Activity {}'.format(activityName))
     ax.invert_yaxis()
-    #ax.set_ylim(10, 4)  
     plt.tight_layout()
     
 

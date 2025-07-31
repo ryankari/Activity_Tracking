@@ -39,6 +39,10 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 import matplotlib
 
+import json
+import importlib.resources
+
+
 matplotlib.use("Qt5Agg")
 from garmin_activity_tracker.garmin_core import ActivityTracker
 from garmin_activity_tracker.plots import (
@@ -60,10 +64,11 @@ class LoadDataWorker(QThread):
     progress = pyqtSignal(str)
     finished = pyqtSignal(object, object, object)  # df_summary, df_running, df_splits
 
-    def __init__(self, tracker, use_api=False):
+    def __init__(self, tracker, use_api=False,config=None):
         super().__init__()
         self.tracker = tracker
         self.use_api = use_api
+        self.config = config
 
     def run(self):
         try:
@@ -71,7 +76,12 @@ class LoadDataWorker(QThread):
             if self.use_api==False: 
                 self.progress.emit("Loading local data without API...")
             else:
-                self.progress.emit("Loading data from Garmin API...")     
+                self.progress.emit("Loading data from Garmin API...")    
+
+            max_activities = self.config.get("api", {}).get("max_activities")
+            batch_size = self.config.get("api", {}).get("batch_size")
+            self.df_summary = self.tracker.sync_summary_data(max_activities,batch_size,self.use_api)
+       
             self.df_summary = self.tracker.sync_summary_data(use_api=self.use_api)
         except Exception as e:
             self.progress.emit(f"Error during sync summary or with signal_map.json: {e}")
@@ -79,7 +89,8 @@ class LoadDataWorker(QThread):
             return
         try:
             self.progress.emit("Preprocessing local running data...")
-            self.df_running = self.tracker.preprocess_running_data(self.df_summary.copy())
+
+            self.df_running = self.tracker.preprocess_running_data(self.df_summary.copy(),self.config)
         except Exception as e:
             self.progress.emit(f"Error during preprocessing: {e}")
             self.finished.emit(None, None, None)
@@ -124,6 +135,20 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Activity Tracker")
         self.setGeometry(100, 100, 1250, 800)
+        self.config = None
+
+
+        def load_config(filename="config_information.json"):
+            try:
+                # If bundled in the package
+                with importlib.resources.open_text("garmin_activity_tracker", filename, encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading config: {e}")
+                return {}
+            
+        if self.config is None:
+            self.config = load_config() 
 
         # Main widget and layout
         main_widget = QWidget()
@@ -321,13 +346,13 @@ class MainWindow(QMainWindow):
                     "GARMIN_USERNAME or GARMIN_PASSWORD environment variable not set."
                 )
                 return
-            self.tracker = ActivityTracker(username, password)
+            self.tracker = ActivityTracker(username, password, self.config)
         else:
             # Credentials not needed for local-only mode
-            self.tracker = ActivityTracker(None, None)
+            self.tracker = ActivityTracker(None, None, self.config)
 
         self.console.append("Starting data load...")
-        self.load_worker = LoadDataWorker(self.tracker, use_api=use_api)
+        self.load_worker = LoadDataWorker(self.tracker, use_api=use_api,config=self.config)
         self.load_worker.progress.connect(self.console.append)
         self.load_worker.finished.connect(self.handle_data_loaded)
         self.load_worker.start()
@@ -340,7 +365,7 @@ class MainWindow(QMainWindow):
         self.df_summary = df_summary
         self.df_running = df_running
         self.df_splits = df_splits
-        self.df_tss = self.tracker.calculate_tss(self.df_running)
+        self.df_tss = self.tracker.calculate_tss(self.df_running,self.config)
         self.plot_calendar(year=None, month=None)  # Default to last 28 days
         self.plot_buttons["Sync Latest Data"].setStyleSheet(modern_button_style)
         for btn in self.plot_buttons.values():
@@ -372,7 +397,7 @@ class MainWindow(QMainWindow):
         print("Splits button clicked")
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        plotSplits(self.df_splits, self.df_running, ax)
+        plotSplits(self.df_splits, self.df_running, ax, self.config)
         self.plot_buttons["Back to Calendar"].show()
         self.canvas.draw()
 
@@ -388,13 +413,13 @@ class MainWindow(QMainWindow):
                 0.5, 0.5, "No splits found for this activity.", ha="center", va="center"
             )
         else:
-            plotSplits(self.df_splits, self.df_running, ax, activityId=activity_id)
+            plotSplits(self.df_splits, self.df_running, ax, activityId=activity_id, config=self.config)
         self.canvas.draw()
 
     def plot_races(self):
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        plot_race_performance(self.df_running, ax)
+        plot_race_performance(self.df_running, ax, self.config)
         self.canvas.draw()
         
 
@@ -407,7 +432,7 @@ class MainWindow(QMainWindow):
             self.last_calendar_mode = "last28"
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        self.calendar_dates = plot_calendar(self.df_running, ax, year=year, month=month)
+        self.calendar_dates = plot_calendar(self.df_running, ax, self.config, year=year, month=month)
         self.canvas.draw()
         self.canvas.mpl_connect("button_press_event", self.on_calendar_click)
         self.plot_buttons["Back to Calendar"].hide()
@@ -464,16 +489,6 @@ class MainWindow(QMainWindow):
                         activity_id = activities[activities['activityName'] == item]['activityId'].values[0]
                     print(activity_id)
                     self.plot_splits_for_activity(activity_id)
-        # if event.inaxes and self.calendar_dates:
-        #     # Find the closest (x, y) cell
-        #     x, y = int(round(event.xdata)), int(round(event.ydata))
-        #     clicked_date = self.calendar_dates.get((x, y))
-        #     if clicked_date:
-        #         activity = self.df_running[self.df_running.index.date == clicked_date]
-        #         if not activity.empty:
-        #             activity_id = activity.iloc[0]["activityId"]
-        #             print(activity_id)
-        #             self.plot_splits_for_activity(activity_id)
 
 
 

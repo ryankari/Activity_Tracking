@@ -18,24 +18,10 @@ import ast
 
 
 
-def get_base_path():
-    if getattr(sys, 'frozen', False):
-        # Running as a PyInstaller bundle
-        return os.path.dirname(sys.executable)
-    else:
-        # Running as a script
-        return os.path.dirname(os.path.abspath(__file__))
 
-BASE_PATH = get_base_path()
-DATA_DIR = os.path.join(BASE_PATH, "data")
-os.makedirs(DATA_DIR, exist_ok=True)  # Ensure the data directory exists
-
-SUMMARY_FILE = os.path.join(DATA_DIR, "garminSummaryData.xlsx")
-SPLITS_FILE = os.path.join(DATA_DIR, "garminSplitData.xlsx")
-OTHER_DATA_FILE = os.path.join(DATA_DIR, "OtherData.xlsx")
 
 class ActivityTracker :
-    def __init__(self, username, password):
+    def __init__(self, username, password, config=None):
         """
         Initialize the ActivityTracker object with Garmin credentials.
 
@@ -43,11 +29,27 @@ class ActivityTracker :
             username (str): Garmin Connect username.
             password (str): Garmin Connect password.
         """
+        def get_base_path():
+            if getattr(sys, 'frozen', False):
+                # Running as a PyInstaller bundle
+                return os.path.dirname(sys.executable)
+            else:
+                # Running as a script
+                return os.path.dirname(os.path.abspath(__file__))
+            
+        self.BASE_PATH = get_base_path()
+        self.DATA_DIR = os.path.join(self.BASE_PATH, "data")
+        os.makedirs(self.DATA_DIR, exist_ok=True)  # Ensure the data directory exists
+
+        self.SUMMARY_FILE = os.path.join(self.DATA_DIR, config.get("files", {}).get("summary_file"))
+        self.SPLITS_FILE = os.path.join(self.DATA_DIR, config.get("files", {}).get("splits_file"))
+        self.OTHER_DATA_FILE = os.path.join(self.DATA_DIR, config.get("files", {}).get("other_data_file"))
+
         self.username = username
         self.password = password
 
     def load_column_map(self,filename="signal_map.json"):
-        path = os.path.join(BASE_PATH, filename)
+        path = os.path.join(self.BASE_PATH, filename)
         try:
             with open(path, "r", encoding="utf-8") as f:
                 mapping = json.load(f)
@@ -74,8 +76,8 @@ class ActivityTracker :
         other_start_time = column_map["otherStartTime"]
         col_activity_id = column_map["activityId"]
 
-        if os.path.exists(SUMMARY_FILE):
-            df_existing = pd.read_excel(SUMMARY_FILE)
+        if os.path.exists(self.SUMMARY_FILE):
+            df_existing = pd.read_excel(self.SUMMARY_FILE)
             df_existing = df_existing.dropna(subset=['activityId'])
             df_existing['activityId'] = df_existing['activityId'].astype(int)
             if col_start_time in df_existing.columns:
@@ -119,18 +121,18 @@ class ActivityTracker :
         df_combined = pd.concat([pd.DataFrame(new_activities), df_existing], ignore_index=True)
 
         if newActivitiesExist:
-            df_combined.to_excel(SUMMARY_FILE, index=False)
+            df_combined.to_excel(self.SUMMARY_FILE, index=False)
 
         if 'df_combined' in locals():
             outputVar = df_combined
         else:
             outputVar = df_existing
 
-        if os.path.exists(OTHER_DATA_FILE):
-            df_other = pd.read_excel(OTHER_DATA_FILE)
+        if os.path.exists(self.OTHER_DATA_FILE):
+            df_other = pd.read_excel(self.OTHER_DATA_FILE)
             if other_start_time in df_other.columns:
                 df_other[other_start_time] = pd.to_datetime(df_other[other_start_time], errors='coerce')
-            print(f"Loaded {len(df_other)} old activities from {OTHER_DATA_FILE}.")
+            print(f"Loaded {len(df_other)} old activities from {self.OTHER_DATA_FILE}.")
             df_combined = pd.concat([outputVar, df_other], ignore_index=True)
 
 
@@ -154,8 +156,8 @@ class ActivityTracker :
         other_start_time = column_map["otherStartTime"]
         col_activity_id = column_map["activityId"]
 
-        if os.path.exists(SPLITS_FILE):
-            df_existing = pd.read_excel(SPLITS_FILE)
+        if os.path.exists(self.SPLITS_FILE):
+            df_existing = pd.read_excel(self.SPLITS_FILE)
             if col_start_time in df_existing.columns:
                 df_existing[col_start_time] = pd.to_datetime(df_existing[col_start_time], errors='coerce')
             existing_ids = set(df_existing[col_activity_id].astype(str))
@@ -242,9 +244,12 @@ class ActivityTracker :
         return result
 
 #***
-    def estimate_rTSS_miles(self,distance_mi, elevation_gain_ft, elevation_loss_ft,
-                            avg_pace_min_per_mi, threshold_pace_min_per_mi = 6.25,
-                            gain_factor=0.0005, loss_factor=0.00015):
+    def estimate_rTSS_miles(self,distance_mi, elevation_gain_ft, elevation_loss_ft,avg_pace_min_per_mi,config):
+        threshold_pace_min_per_mi = float(config.get("tss", {}).get("threshold_pace_min_per_mi"))
+        gain_factor = float(config.get("tss", {}).get("gain_factor", 0.0005))
+        loss_factor = float(config.get("tss", {}).get("loss_factor", 0))
+        
+        
         equiv_dist_mi = distance_mi + (elevation_gain_ft * gain_factor) + (elevation_loss_ft * loss_factor)
         duration_hr = equiv_dist_mi * avg_pace_min_per_mi / 60
         IF = threshold_pace_min_per_mi / avg_pace_min_per_mi
@@ -252,7 +257,8 @@ class ActivityTracker :
         return rTSS
 
 
-    def preprocess_running_data(self, df):
+    def preprocess_running_data(self, df, config=None):
+        self.config = config
         
         activity_list = df['activityType'].tolist()
         
@@ -279,12 +285,15 @@ class ActivityTracker :
                 total_min = row['duration'] / 60
                 pace = total_min / row['distance']
                 vo2 = 108.844 - 0.1636 * (170 / 2.2) - (1.438 * pace) - (0.1928 * float(row['averageHR']))
-                TSS = self.estimate_rTSS_miles(
+                TSS = self.estimate_rTSS_miles( 
                     distance_mi=row['distance'],
                     elevation_gain_ft=row.get('elevationGain', 0),
                     elevation_loss_ft=row.get('elevationLoss', 0),
-                    avg_pace_min_per_mi=pace
+                    avg_pace_min_per_mi=pace,
+                    config = self.config
                 )
+                    
+                
                 Pace.append(pace)
                 VO2.append(vo2)
                 TSSArray.append(TSS)
@@ -301,7 +310,7 @@ class ActivityTracker :
         df['TSS'] = TSSArray    
         return df
 
-    def calculate_tss(self, df):
+    def calculate_tss(self, df, config=None):
         df_tss = df.reset_index()
         df_tss = df_tss[['startTimeLocal', 'TSS']].copy()  # Extract TSS data
         df_tss['startTimeLocal'] = pd.to_datetime(df_tss['startTimeLocal']).dt.floor('D')
@@ -310,8 +319,8 @@ class ActivityTracker :
         df_daily = pd.merge(full_dates, df_tss, on='startTimeLocal', how='left')
         df_daily['TSS'] = df_daily['TSS'].fillna(0.0)
 
-        CTL_CONST = 42
-        ATL_CONST = 7
+        CTL_CONST = float(config.get("tss", {}).get("ctl_const", 42))
+        ATL_CONST = float(config.get("tss", {}).get("atl_const", 7))
 
         ctl = atl = df_daily.loc[0, 'TSS']
         df_daily['ctl'] = 0.0

@@ -204,6 +204,7 @@ class MainWindow(QMainWindow):
         for i, month in enumerate(calendar.month_abbr[1:], 1):  # Jan to Dec
             self.month_combo.addItem(month, i)
         self.month_combo.setCurrentIndex(datetime.datetime.now().month - 1)
+        self.month_combo.setMaxVisibleItems(12) 
         self.month_combo.currentIndexChanged.connect(self.update_calendar_from_selector)
         year_month_layout.addWidget(QLabel("Month:"))
         year_month_layout.addWidget(self.month_combo)
@@ -438,7 +439,6 @@ class MainWindow(QMainWindow):
         self.plot_buttons["Back to Calendar"].hide()
 
     def update_calendar_from_selector(self):
-        print("update_calendar_from_selector fired!")
         year = int(self.year_combo.currentText())
         month = self.month_combo.currentData()
         self.plot_calendar(year=year, month=month)

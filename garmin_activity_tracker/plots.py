@@ -5,6 +5,7 @@ Author: Ryan Kari
 License: MIT
 Created: 2025-07-20
 """
+from cProfile import label
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import pandas as pd
@@ -315,10 +316,13 @@ def plotSplits(df_splits, df_running, ax, activityId=None, config=None):
 
     # Example usage:
     formatted_paces = [format_pace(p) for p in pace]
-
-    for left, p, label, width in zip(lefts, pace, formatted_paces, bar_widths):
+    formatted_hr = [str(int(h)) for h in latest_splits['averageHR'].values]
+    
+    formatted_paces_hr = [f"{pace_str}  ({hr_str})" for pace_str, hr_str in zip(formatted_paces, formatted_hr)]  
+    for left, p, label, width, hr in zip(lefts, pace, formatted_paces_hr, bar_widths, formatted_hr):
         ax.text(left + width / 2, p+.25, label,
             ha='center', va='top', rotation=90, fontsize=9)
+
 
     ax.invert_yaxis()
 

@@ -59,7 +59,9 @@ def AI_format(df, df_splits,df_tss,n=50):
         dfTemp['Elevation Gain [ft]'] = (latest_splits['elevationGain'] - latest_splits['elevationLoss'])*3.28084  # Convert meters to feet
         dfTemp['Average HR'] = latest_splits['averageHR']
         splitSimple = pd.concat([splitSimple, dfTemp], ignore_index=True)
-    splitSimple = splitSimple.rename(columns={'duration':'duration [min]'})
+    splitSimple['duration'] = splitSimple['duration']*60
+    splitSimple['distance'] = splitSimple['distance'].round(2)
+    splitSimple = splitSimple.rename(columns={'duration':'duration [seconds]'})
     splitSimple = splitSimple.rename(columns={'distance':'distance [miles]'})
     # Sort by split number if needed (assumes 'lapIndex' or similar exists)
 

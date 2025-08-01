@@ -98,7 +98,25 @@ class ActivityTracker :
 
 
         if not use_api:
-            return df_existing
+            df_other = None
+            if os.path.exists(self.OTHER_DATA_FILE):
+                try:
+                    df_other = pd.read_excel(self.OTHER_DATA_FILE)
+                except Exception as e:
+                    print(f"Error loading OTHER_DATA_FILE: {e}")
+                    df_other = None
+            self.df_other = df_other
+
+            # Combine df_existing and df_other if df_other is not None
+            if df_other is not None and not df_other.empty:
+                df_combined = pd.concat([df_existing, df_other], ignore_index=True)
+            else:
+                df_combined = df_existing
+
+            print("Loaded local data with {} records.".format(len(df_combined)))
+            return df_combined
+
+
 
         client = Garmin(self.username, self.password)
         client.login()
@@ -127,13 +145,6 @@ class ActivityTracker :
             outputVar = df_combined
         else:
             outputVar = df_existing
-
-        if os.path.exists(self.OTHER_DATA_FILE):
-            df_other = pd.read_excel(self.OTHER_DATA_FILE)
-            if other_start_time in df_other.columns:
-                df_other[other_start_time] = pd.to_datetime(df_other[other_start_time], errors='coerce')
-            print(f"Loaded {len(df_other)} old activities from {self.OTHER_DATA_FILE}.")
-            df_combined = pd.concat([outputVar, df_other], ignore_index=True)
 
 
         print("Data synced with df_summary with length = {} records".format(len(outputVar)))
@@ -192,7 +203,7 @@ class ActivityTracker :
                     print(f"No existing file. Failed to get splits for {aid}: {e}")
                     pass
             df_combined = pd.concat([pd.DataFrame(new_splits), df_existing], ignore_index=True)
-            df_combined.to_excel(SPLITS_FILE, index=False)
+            df_combined.to_excel(self.SPLITS_FILE, index=False)
 
             return df_existing
         else:
@@ -222,7 +233,7 @@ class ActivityTracker :
                 print("No new splits found for the latest activities.")
             else:
                 print(f"Found {len(new_splits)} new splits for the latest activities.")
-                df_combined.to_excel(SPLITS_FILE, index=False)
+                df_combined.to_excel(self.SPLITS_FILE, index=False)
             return df_combined
 
     def extract_typekey_list(self,series):

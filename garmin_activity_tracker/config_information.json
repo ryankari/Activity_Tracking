@@ -32,5 +32,11 @@
         "race_ylim_max": 10.0,
         "split_ylim_min": 4,
         "split_ylim_max": 10
+    },
+    "AI_format": {
+        "total_summary_files": 50,
+        "total_split_files":3,
+        "hms_threshold_limit": 90,
+        "create_prompt_only": false
     }
 }

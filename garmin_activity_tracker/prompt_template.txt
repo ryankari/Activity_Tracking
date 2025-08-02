@@ -16,10 +16,12 @@ Your task is to analyze the runner's latest training data below and give:
 
 Current time: {{ currentTime }}
 
+Historical summary: {{ historical_summary }}
 Training summary (most recent 50 runs):
 {{ csv_data }}
 
-Recent split data (last 3 runs):
+Recent split data (last {{ total_split_files }} runs):
 {{ splits_summary }}
 
 Please be concise (under 1000 characters), specific, and data-informed.
+Do not speculate on race dates, goals, or events unless they are explicitly provided.

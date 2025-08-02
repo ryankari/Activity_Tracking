@@ -503,7 +503,7 @@ class MainWindow(QMainWindow):
         self.conversation_history.append(f"User: {user_msg}")
 
         # Prepare prompt for AI
-        prompt_content, _ = AI_format(self.df_running, self.df_splits, self.df_tss)
+        prompt_content, _ = AI_format(self.df_running, self.df_splits, self.df_tss, self.config)
         if prompt_content.startswith("ERROR:"):
             self.console.append(prompt_content)  # Or however you display messages
             return  # Exit the function, don't proceed with AI call
@@ -512,6 +512,13 @@ class MainWindow(QMainWindow):
         )
         self.console.append(f"<b>You:</b> {formatted_response}")
         try:
+            if self.config.get("AI_format", {}).get("create_prompt_only", True):
+                    # Copy prompt_content to clipboard
+                clipboard = QApplication.clipboard()
+                clipboard.setText(prompt_content)
+                self.console.append("<i>Prompt copied to clipboard.</i>")
+                return
+            
             self.plot_buttons["Chat with AI Coach"].setStyleSheet(ai_running_style)
             QApplication.processEvents()
             ai_response = ""
@@ -536,7 +543,7 @@ class MainWindow(QMainWindow):
         self.console.append(f"<b>You:</b> {user_msg}")
         self.conversation_history.append(f"User: {user_msg}")
         # Prepare prompt for AI
-        prompt_content, _ = AI_format(self.df_running, self.df_splits, self.df_tss)
+        prompt_content, _ = AI_format(self.df_running, self.df_splits, self.df_tss, self.config)
         prompt_content += "\n" + "\n".join(self.conversation_history)
         try:
             self.plot_buttons["Chat with AI Coach"].show()

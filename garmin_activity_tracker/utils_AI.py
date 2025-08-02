@@ -24,8 +24,12 @@ def resource_path(relative_path):
 # Now use resource_path when you need to access bundled files:
 PROMPT_TEMPLATE = resource_path('garmin_activity_tracker/prompt_template.txt')
 
-def AI_format(df, df_splits,df_tss,n=50):
-    dfInput = df.head(n).copy().reset_index()
+def AI_format(df, df_splits,df_tss, config):
+
+    total_summary_files = int(config.get("AI_format", {}).get("total_summary_files",50))
+    total_split_files = int(config.get("AI_format", {}).get("total_split_files",3))
+
+    dfInput = df.head(total_summary_files).copy().reset_index()
     dataSimple = pd.DataFrame({})
     dataSimple['distance [miles]'] = dfInput['distance']
     dataSimple['duration [minutes]'] = np.round(dfInput['elapsedDuration']/60,1)
@@ -42,7 +46,7 @@ def AI_format(df, df_splits,df_tss,n=50):
     csv_data = dataSimple.round(1).to_csv(index=False)
     currentTime = datetime.datetime.now().isoformat()
 
-    numSplits = 3
+    numSplits = total_split_files
     splitSimple = pd.DataFrame({})  
     latest_ids = df.iloc[0:numSplits]['activityId']
     dfTemp = pd.DataFrame({})
@@ -77,13 +81,16 @@ def AI_format(df, df_splits,df_tss,n=50):
 
     # Join all split summaries into a single string
     splits_summary = "\n".join(splitString)
-
+    historical_summary = get_historical_summary(df,config)
     prompt_content = load_prompt_template(
     PROMPT_TEMPLATE,
     currentTime=currentTime,
     csv_data=csv_data,
-    splits_summary=splits_summary
-    )            
+    splits_summary=splits_summary,
+    total_split_files=total_split_files,
+    historical_summary=historical_summary
+    )
+
 
     if prompt_content is None:
         # Instead of print, return a special error message
@@ -115,4 +122,60 @@ def get_response(prompt,model='tinyllama'):
     print(response['message']['content'])
     return response['message']['content']
     
+
+def get_historical_summary(df, config, max_years=10):
+    # Ensure datetime
+
+    hms_threshold_limit = int(config.get("AI_format", {}).get("hms_threshold_limit", 90)) # in minutes
+    df = df.copy()
+    df['year'] = df.index.year
+    df['week'] = df.index.isocalendar().week  # <-- Add here, before slicing
+
+    all_years = sorted(df['year'].unique())
+    years_to_show = all_years[-max_years:]  # last N years
+
+    summary_lines = []
+    for year in years_to_show:
+        df_year = df[df['year'] == year]
+
+        # Total miles
+        total_miles = df_year['distance'].sum().round()
+
+        # Find sub-90 and sub-88 half marathons
+        # Assume HM is identified by 'activityName' or similar, and time is in 'elapsedDuration' (seconds)
+        # 13.1 miles = HM
+        marathons = df_year[(df_year['Race']=='race') & (df_year['distance'] >= 26.0) & (df_year['distance'] <= 26.5)]
+        hms = df_year[(df_year['Race']=='race') & (df_year['distance'] >= 13) & (df_year['distance'] <= 13.3)]
+        #hms = df_year[(df_year['distance'] >= 13) & (df_year['distance'] <= 13.3)]
+        hms_thresh = hms[hms['elapsedDuration'] <= hms_threshold_limit*60]
+
+        
+        # Average TSS per week
+        if 'TSS' in df_year.columns:
+            if 'week' not in df_year.columns:
+                df_year['week'] = df_year.index.isocalendar().week
+            tss_per_week = df_year.groupby('week')['TSS'].sum()
+            avg_tss_week = int(np.round(tss_per_week.mean()))
+            peak_week = int(np.round(tss_per_week.max()))
+        else:
+            avg_tss_week = peak_week = 0
+
+        # Build line dynamically
+        parts = [
+            f"{year}: ~{int(total_miles)} miles",
+        ]
+        if len(hms_thresh) > 0:
+            parts.append(f"{len(hms_thresh)}x sub-{hms_threshold_limit} min HM")
+        else:
+            parts.append(f"{len(hms)} half marathons with average time of {hms['duration'].mean() // 60} minutes")
+        if len(marathons) > 0:
+            parts.append(f"{len(marathons)}x marathon with average time of {marathons['duration'].mean() // 60} minutes")
+        if avg_tss_week > 0:
+            parts.append(f"avg TSS/week ≈ {avg_tss_week}")
+        if peak_week > 0:
+            parts.append(f"peak week: {peak_week}")
+
+        line = ", ".join(parts)
+        summary_lines.append(line)
+    return "Historical Summary\n" + "\n".join(summary_lines)
 

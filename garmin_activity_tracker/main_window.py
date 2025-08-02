@@ -379,7 +379,7 @@ class MainWindow(QMainWindow):
     def plot_tss(self):
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        plot_TSS(self.df_tss, ax)
+        plot_TSS(self.df_running,self.df_tss, ax)
         self.canvas.draw()
 
     def plot_basic_metrics(self):

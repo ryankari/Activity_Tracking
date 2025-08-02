@@ -39,6 +39,13 @@ def create_basic_metric_plot(df, ax, show_trend=True):
     ax[-1].xaxis.set_major_locator(mdates.YearLocator(1))
     ax[-1].xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
     plt.setp(ax[-1].xaxis.get_majorticklabels(), rotation=45)
+
+    latest_date = df.index.max()
+    earliest_date = latest_date - pd.DateOffset(years=10)
+    # Set x-axis limits for all subplots
+    for axis in ax:
+        axis.set_xlim([earliest_date, latest_date])
+
     plt.tight_layout()
     #plt.show()
 
@@ -60,6 +67,11 @@ def createAdvancedMetricPlot(df, ax, show_trend=True):
     monthlyFastest = df.resample('ME')['Avg Pace'].agg(['min'])
 
 
+    latest_date = df.index.max()
+    earliest_date = latest_date - pd.DateOffset(years=10)
+    # Set x-axis limits for all subplots
+    for axis in ax:
+        axis.set_xlim([earliest_date, latest_date])
 
     ax[1].plot(monthlyFastest, '.')
     ax[1].set_ylabel('Fastest avg pace [min/mi]')
@@ -355,7 +367,7 @@ def plotSplits(df_splits, df_running, ax, activityId=None, config=None):
     #print("Splits synced with df_summary with length = {} records".format(len(df_splits['activity_id'].unique())))
     #plt.show()
 
-def plot_TSS(df_daily,ax):
+def plot_TSS(df,df_daily,ax):
     """
     Plots TSS (Training Stress Score) over time.
     """
@@ -369,5 +381,7 @@ def plot_TSS(df_daily,ax):
     ax.set_ylabel('Score')
     ax.legend()
     ax.grid(True)
-    #ax.tight_layout()
-    #plt.show()
+    latest_date = df.index.max()
+    earliest_date = latest_date - pd.DateOffset(years=10)
+    # Set x-axis limits for all subplots
+    ax.set_xlim([earliest_date, latest_date])

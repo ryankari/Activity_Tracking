@@ -93,7 +93,12 @@ class ActivityTracker :
         else:
             df_existing = pd.DataFrame()
             existing_ids = set()
-            use_api = True
+            print("No existing summary data file found.")
+            if not use_api:
+                print("API not enabled. Returning empty list.")
+                return []
+            else:
+                print("Will create new file and sync with Garmin API.")
 
 
 
@@ -138,16 +143,24 @@ class ActivityTracker :
 
         df_combined = pd.concat([pd.DataFrame(new_activities), df_existing], ignore_index=True)
 
-        if newActivitiesExist:
-            df_combined.to_excel(self.SUMMARY_FILE, index=False)
+        if newActivitiesExist or not os.path.exists(self.SUMMARY_FILE):
+            # Ensure the directory exists before saving
+            os.makedirs(os.path.dirname(self.SUMMARY_FILE), exist_ok=True)
+            try:
+                df_combined.to_excel(self.SUMMARY_FILE, index=False)
+                print(f"Data saved to {self.SUMMARY_FILE}")
+                print(f"Saved {len(df_combined)} records to file")
+            except Exception as e:
+                print(f"Error saving data to {self.SUMMARY_FILE}: {e}")
 
-        if 'df_combined' in locals():
+        if 'df_combined' in locals() and not df_combined.empty:
             outputVar = df_combined
         else:
             outputVar = df_existing
 
-
-        print("Data synced with df_summary with length = {} records".format(len(outputVar)))
+        print(f"Data synced with df_summary with length = {len(outputVar)} records")
+        if len(outputVar) == 0:
+            print("WARNING: No data returned from sync_summary_data")
         return outputVar
 
     def sync_split_data(self, df_summary, n=30000, use_api=True):
@@ -187,34 +200,39 @@ class ActivityTracker :
         df_summary = df_summary.reset_index()
         df_summary[col_start_time] = pd.to_datetime(df_summary[col_start_time], errors='coerce')
         df_sorted = df_summary.sort_values(by=col_start_time, ascending=False).head(n)
+        
         if df_existing.empty:
-            print("No summary data available to fetch splits.")
+            print("No existing splits file found. Downloading splits for all activities.")
             for _, row in df_sorted.iterrows():
-                
                 try:
-                    aid = str(int(row.get(col_activity_id )))
+                    aid = str(int(row.get(col_activity_id)))
                     print("Requested activityId {}".format(aid))
                     details = client.get_activity_splits(aid)
                     print("New splits found for activityId {}".format(aid))
                     for lap in details.get("lapDTOs", []):
-                        lap[col_activity_id ] = aid
+                        lap[col_activity_id] = aid
                         new_splits.append(lap)
                 except Exception as e:
                     print(f"No existing file. Failed to get splits for {aid}: {e}")
                     pass
-            df_combined = pd.concat([pd.DataFrame(new_splits), df_existing], ignore_index=True)
-            df_combined.to_excel(self.SPLITS_FILE, index=False)
-
-            return df_existing
-        else:
             
+            if new_splits:
+                df_combined = pd.DataFrame(new_splits)
+                # Ensure directory exists before saving
+                os.makedirs(os.path.dirname(self.SPLITS_FILE), exist_ok=True)
+                df_combined.to_excel(self.SPLITS_FILE, index=False)
+                print(f"Created new splits file with {len(new_splits)} splits")
+                return df_combined
+            else:
+                print("No splits data could be downloaded")
+                return pd.DataFrame()
+        else:
+            print("Existing splits file found. Checking for new activities.")
             for _, row in df_sorted.iterrows():
-
                 try:
-                    rowValue = row.get(col_activity_id )
+                    rowValue = row.get(col_activity_id)
                     if pd.isna(rowValue):
                         print("Skipping NaN activityId")
-                        
                     else:
                         aid = str(int(rowValue))
                         if aid not in existing_ids:
@@ -233,6 +251,8 @@ class ActivityTracker :
                 print("No new splits found for the latest activities.")
             else:
                 print(f"Found {len(new_splits)} new splits for the latest activities.")
+                # Ensure directory exists before saving
+                os.makedirs(os.path.dirname(self.SPLITS_FILE), exist_ok=True)
                 df_combined.to_excel(self.SPLITS_FILE, index=False)
             return df_combined
 
@@ -271,13 +291,26 @@ class ActivityTracker :
     def preprocess_running_data(self, df, config=None):
         self.config = config
         
+        print(f"Starting preprocessing with {len(df)} records")
+        
+        if df.empty:
+            print("ERROR: Empty DataFrame passed to preprocess_running_data")
+            return df
+        
         activity_list = df['activityType'].tolist()
         
         df['Type'] = self.extract_typekey_list(df['activityType'])
         df['Race'] = self.extract_typekey_list(df['eventType'])
         
+        print(f"After adding Type/Race columns: {len(df)} records")
         
         df = df[(df['Type'].str.lower() == 'running')].reset_index(drop=True)
+        print(f"After filtering for running activities: {len(df)} records")
+        
+        if df.empty:
+            print("WARNING: No running activities found after filtering")
+            return df
+            
         Pace = []
         VO2 = []
         TSSArray = []
@@ -292,7 +325,6 @@ class ActivityTracker :
                 if isinstance(row['duration'], str):
                     t = datetime.datetime.strptime(row['duration'], '%H:%M:%S')
 
-
                 total_min = row['duration'] / 60
                 pace = total_min / row['distance']
                 vo2 = 108.844 - 0.1636 * (170 / 2.2) - (1.438 * pace) - (0.1928 * float(row['averageHR']))
@@ -304,7 +336,6 @@ class ActivityTracker :
                     config = self.config
                 )
                     
-                
                 Pace.append(pace)
                 VO2.append(vo2)
                 TSSArray.append(TSS)
@@ -312,13 +343,28 @@ class ActivityTracker :
                 print(f"Error on row {index}: {e}")
                 Pace.append(np.nan)
                 VO2.append(np.nan)
+                TSSArray.append(np.nan)
 
-        df['Avg Pace'] = Pace
-        df['Avg HR'] = df['averageHR'].astype(float)
-        df['Avg Cadence'] = df['maxDoubleCadence'].astype(float)
-        df['VO2'] = VO2
-        df['Velocity (m/s)'] = 1609.34 / (df['Avg Pace'] * 60)
-        df['TSS'] = TSSArray    
+        print(f"Calculated metrics for {len(df)} records")
+        print(f"Pace array length: {len(Pace)}")
+        print(f"VO2 array length: {len(VO2)}")
+        print(f"TSS array length: {len(TSSArray)}")
+
+        try:
+            df['Avg Pace'] = Pace
+            df['Avg HR'] = df['averageHR'].astype(float)
+            df['Avg Cadence'] = df['maxDoubleCadence'].astype(float)
+            df['VO2'] = VO2
+            df['Velocity (m/s)'] = 1609.34 / (df['Avg Pace'] * 60)
+            df['TSS'] = TSSArray
+        except Exception as e:
+            print(f"Error assigning calculated columns: {e}")
+            print(f"DataFrame length: {len(df)}")
+            print(f"Pace length: {len(Pace)}")
+            print(f"VO2 length: {len(VO2)}")
+            print(f"TSS length: {len(TSSArray)}")
+            raise
+            
         return df
 
     def calculate_tss(self, df, config=None):

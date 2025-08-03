@@ -30,7 +30,7 @@ from PyQt5.QtGui import QFont
 import datetime
 import calendar
 import shutil
-
+import pandas as pd
 import subprocess
 
 from PyQt5.QtCore import Qt
@@ -63,6 +63,7 @@ from garmin_activity_tracker.styles import (
 class LoadDataWorker(QThread):
     progress = pyqtSignal(str)
     finished = pyqtSignal(object, object, object)  # df_summary, df_running, df_splits
+    enable_sync_button = pyqtSignal()  # Signal to re-enable sync button
 
     def __init__(self, tracker, use_api=False,config=None):
         super().__init__()
@@ -82,14 +83,20 @@ class LoadDataWorker(QThread):
             batch_size = self.config.get("api", {}).get("batch_size")
             self.df_summary = self.tracker.sync_summary_data(max_activities,batch_size,self.use_api)
        
-            self.df_summary = self.tracker.sync_summary_data(use_api=self.use_api)
+            #self.df_summary = self.tracker.sync_summary_data(use_api=self.use_api)
         except Exception as e:
             self.progress.emit(f"Error during sync summary or with signal_map.json: {e}")
             self.finished.emit(None, None, None)
             return
         try:
+            #if self.df_summary == []:
+            if not isinstance(self.df_summary, pd.DataFrame) or self.df_summary.empty:
+                self.progress.emit("No activities found. Please sync with Garmin API.")
+                self.finished.emit(None, None, None)
+                self.enable_sync_button.emit()  # Signal to re-enable sync button
+                return
+                  
             self.progress.emit("Preprocessing local running data...")
-
             self.df_running = self.tracker.preprocess_running_data(self.df_summary.copy(),self.config)
         except Exception as e:
             self.progress.emit(f"Error during preprocessing: {e}")
@@ -104,7 +111,7 @@ class LoadDataWorker(QThread):
         except Exception as e:
             self.progress.emit(f"Error during data load: {e}")
             self.finished.emit(None, None, None)
-
+        return
 
 class AIWorker(QThread):
     chunk_ready = pyqtSignal(str)
@@ -179,6 +186,8 @@ class MainWindow(QMainWindow):
             button_layout.addWidget(btn)
             self.plot_buttons[label] = btn
 
+        # Enable the Sync button immediately so users can always try to sync
+        self.plot_buttons["Sync Latest Data"].setEnabled(True)
         self.plot_buttons["Back to Calendar"].hide()
 
         year_month_widget = QWidget()
@@ -352,10 +361,11 @@ class MainWindow(QMainWindow):
             # Credentials not needed for local-only mode
             self.tracker = ActivityTracker(None, None, self.config)
 
-        self.console.append("Starting data load...")
+        self.console.append("Use Garmin API = {}".format(use_api))
         self.load_worker = LoadDataWorker(self.tracker, use_api=use_api,config=self.config)
         self.load_worker.progress.connect(self.console.append)
         self.load_worker.finished.connect(self.handle_data_loaded)
+        self.load_worker.enable_sync_button.connect(self.enable_sync_button)
         self.load_worker.start()
 
 
@@ -363,14 +373,30 @@ class MainWindow(QMainWindow):
         if df_summary is None:
             self.console.append("Data load failed.")
             return
+        
         self.df_summary = df_summary
         self.df_running = df_running
         self.df_splits = df_splits
-        self.df_tss = self.tracker.calculate_tss(self.df_running,self.config)
+        
+        # Check if we have valid data
+        if self.df_running is None or self.df_running.empty:
+            self.console.append("No running data available.")
+            return
+            
+        if self.df_splits is None:
+            self.console.append("Warning: No splits data available.")
+            self.df_splits = pd.DataFrame()  # Initialize as empty DataFrame
+        
+        self.df_tss = self.tracker.calculate_tss(self.df_running, self.config)
         self.plot_calendar(year=None, month=None)  # Default to last 28 days
         self.plot_buttons["Sync Latest Data"].setStyleSheet(modern_button_style)
         for btn in self.plot_buttons.values():
             btn.setEnabled(True)
+
+    def enable_sync_button(self):
+        """Re-enable the sync button when called from worker thread"""
+        self.plot_buttons["Sync Latest Data"].setEnabled(True)
+        self.plot_buttons["Sync Latest Data"].setStyleSheet(modern_button_style)
 
     def clear_figure(self):
         self.figure.clear()
@@ -398,6 +424,17 @@ class MainWindow(QMainWindow):
         print("Splits button clicked")
         self.clear_figure()
         ax = self.figure.add_subplot(111)
+        
+        # Check if splits data is available
+        if self.df_splits is None or self.df_splits.empty:
+            ax.text(
+                0.5, 0.5, "No splits data available.\nTry syncing with Garmin API to download splits.", 
+                ha="center", va="center"
+            )
+            self.plot_buttons["Back to Calendar"].show()
+            self.canvas.draw()
+            return
+            
         plotSplits(self.df_splits, self.df_running, ax, self.config)
         self.plot_buttons["Back to Calendar"].show()
         self.canvas.draw()
@@ -405,10 +442,31 @@ class MainWindow(QMainWindow):
     def plot_splits_for_activity(self, activity_id):
         self.clear_figure()
         ax = self.figure.add_subplot(111)
+        
+        # Check if splits data is available and has the required column
+        if self.df_splits is None or self.df_splits.empty:
+            ax.text(
+                0.5, 0.5, "No splits data available.\nTry syncing with Garmin API to download splits.", 
+                ha="center", va="center"
+            )
+            self.plot_buttons["Back to Calendar"].show()
+            self.canvas.draw()
+            return
+            
+        if 'activityId' not in self.df_splits.columns:
+            ax.text(
+                0.5, 0.5, "Splits data missing activityId column.\nTry syncing with Garmin API.", 
+                ha="center", va="center"
+            )
+            self.plot_buttons["Back to Calendar"].show()
+            self.canvas.draw()
+            return
+        
         # Filter splits for the selected activity
-        splits = self.df_splits[self.df_splits["activityId"].astype(str)  == str(activity_id)]
-        activity = self.df_running[self.df_running["activityId"].astype(str)  == str(activity_id)]
+        splits = self.df_splits[self.df_splits["activityId"].astype(str) == str(activity_id)]
+        activity = self.df_running[self.df_running["activityId"].astype(str) == str(activity_id)]
         self.plot_buttons["Back to Calendar"].show()
+        
         if splits.empty:
             ax.text(
                 0.5, 0.5, "No splits found for this activity.", ha="center", va="center"

@@ -420,6 +420,49 @@ class ActivityTracker :
         return df
 
 
+    def preprocess_strength_training_data(self, df, config=None):
+        self.config = config
+
+        print(f"Starting strength training preprocessing with {len(df)} records")
+
+        if df.empty:
+            print("ERROR: Empty DataFrame passed to preprocess_strength_training_data")
+            return df
+        
+        activity_list = df['activityType'].tolist()
+        
+        df['Type'] = self.extract_typekey_list(df['activityType'])
+        df['Race'] = self.extract_typekey_list(df['eventType'])
+        
+        df = df[(df['Type'].str.lower() == 'strength_training')].reset_index(drop=True)
+        print(f"After filtering for strength training activities: {len(df)} records")
+
+        if df.empty:
+            print("WARNING: No strength training activities found after filtering")
+            return df
+            
+        Pace = []
+        VO2 = []
+        TSSArray = []
+        df['duration_str'] = df['duration'].apply(lambda x: str(datetime.timedelta(seconds=int(x))))
+        
+        df['startTimeLocal'] = pd.to_datetime(df['startTimeLocal'], errors='coerce')
+        df = df.set_index('startTimeLocal')
+
+        for index, row in df.iterrows():
+            try:
+                if isinstance(row['duration'], str):
+                    t = datetime.datetime.strptime(row['duration'], '%H:%M:%S')
+                total_min = row['duration'] / 60
+
+            except Exception as e:
+                print(f"Error on row {index}: {e}")
+ 
+
+        return df
+
+
+
     def calculate_tss(self, df, config=None):
         df_tss = df.reset_index()
         df_tss = df_tss[['startTimeLocal', 'TSS']].copy()  # Extract TSS data

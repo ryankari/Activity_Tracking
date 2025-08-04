@@ -39,7 +39,7 @@ class LoadDataWorker(QThread):
             df_running = self.tracker.preprocess_running_data(df_summary.copy(), self.config)
             df_cycling = self.tracker.preprocess_cycling_data(df_summary.copy(), self.config)
             df_swimming = []
-            df_workouts = []
+            df_workouts = self.tracker.preprocess_strength_training_data(df_summary.copy(), self.config)
         except Exception as e:
             self.progress.emit(f"Error during preprocessing: {e}")
             self.finished.emit(None)

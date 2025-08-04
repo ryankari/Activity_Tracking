@@ -31,7 +31,7 @@ import datetime
 import calendar
 import shutil
 import pandas as pd
-import subprocess
+
 
 from PyQt5.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -54,7 +54,7 @@ from garmin_activity_tracker.plots import (
     plot_calendar,
     plot_race_performance
 )
-from garmin_activity_tracker.utils_AI import get_response, AI_format
+from garmin_activity_tracker.utils_AI import get_response, AI_format, get_ollama_models
 from garmin_activity_tracker.styles import (
     modern_button_style,
     modern_combobox_style,
@@ -178,7 +178,7 @@ class MainWindow(QMainWindow):
 
         # In your __init__ after other widgets
         if self.is_ollama_installed():
-            models = self.get_ollama_models()
+            models = get_ollama_models(self)
             if models:
                 self.ollama_model_combo = QComboBox()
                 self.ollama_model_combo.addItems(models)
@@ -245,8 +245,8 @@ class MainWindow(QMainWindow):
         #self.df_summary = None
         #self.df_running = None
         #self.df_running_splits = None
-        #self.df_tss = None
-        print(self.get_ollama_models())
+        # Note: TSS is now stored in self.activities['Running']['TSS']
+        print(get_ollama_models(self))
         self.load_data_async(use_api=False)
 
 
@@ -267,22 +267,6 @@ class MainWindow(QMainWindow):
         return username, password
 
 
-    def get_ollama_models(self):
-        for cmd in ["ollama", "ollama.exe"]:
-            try:
-                result = subprocess.run(
-                    [cmd, "list"], capture_output=True, text=True, check=True
-                )
-                models = []
-                for line in result.stdout.splitlines()[1:]:
-                    if line.strip():
-                        model_name = line.split()[0]
-                        models.append(model_name)
-                return models
-            except Exception as e:
-                continue
-        print("Error listing Ollama models: ollama not found in PATH")
-        return []
 
     def set_ollama_model(self, model_name):
         self.selected_ollama_model = model_name
@@ -329,7 +313,8 @@ class MainWindow(QMainWindow):
             self.console.append("Warning: No splits data available.")
             self.activities['Running']['Splits'] = None  # Initialize as empty DataFrame
         
-        self.df_tss = self.tracker.calculate_tss(self.activities['Running']['Summary'], self.config)
+        # Calculate and store TSS in the activities structure
+        self.activities['Running']['TSS'] = self.tracker.calculate_tss(self.activities['Running']['Summary'], self.config)
         self.plot_calendar_func(year=None, month=None)  # Default to last 28 days
         self.plot_buttons["Sync Latest Data"].setStyleSheet(modern_button_style)
         for btn in self.plot_buttons.values():
@@ -347,7 +332,7 @@ class MainWindow(QMainWindow):
     def plot_tss(self):
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        plot_TSS(self.activities['Running']['Summary'], self.df_tss, ax)
+        plot_TSS(self.activities['Running']['Summary'], self.activities['Running']['TSS'], ax)
         self.canvas.draw()
 
     def plot_basic_metrics(self):
@@ -507,7 +492,7 @@ class MainWindow(QMainWindow):
         self.conversation_history.append(f"User: {user_msg}")
 
         # Prepare prompt for AI
-        prompt_content, _ = AI_format(self.activities['Running']['Summary'], self.activities['Running']['Splits'], self.activities['Running']['TSS'], self.config)
+        prompt_content, _ = AI_format(self.activities, self.config)
         if prompt_content.startswith("ERROR:"):
             self.console.append(prompt_content)  # Or however you display messages
             return  # Exit the function, don't proceed with AI call
@@ -547,7 +532,7 @@ class MainWindow(QMainWindow):
         self.console.append(f"<b>You:</b> {user_msg}")
         self.conversation_history.append(f"User: {user_msg}")
         # Prepare prompt for AI
-        prompt_content, _ = AI_format(self.activities['Running']['Summary'], self.activities['Running']['Splits'], self.df_tss, self.config)
+        prompt_content, _ = AI_format(self.activities, self.config)
         prompt_content += "\n" + "\n".join(self.conversation_history)
         try:
             self.plot_buttons["Chat with AI Coach"].show()

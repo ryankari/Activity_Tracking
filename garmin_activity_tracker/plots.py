@@ -136,39 +136,147 @@ def distance_to_size(distance, min_dist=2, max_dist=13, min_size=200, max_size=1
     sizeOutput = min_size + (max_size - min_size) * ((distanceScaled - min_dist) / (max_dist - min_dist))
     return sizeOutput
 
+def get_activity_style(activity_type, row, config):
+    """
+    Returns style information (color, size, label) for different activity types.
+    
+    Parameters:
+        activity_type: String indicating the activity type ('Running', 'Cycling', 'Swimming', 'Workouts')
+        row: DataFrame row containing activity data
+        config: Configuration dictionary
+    
+    Returns:
+        dict: Contains 'color', 'size', 'label', 'metric' for the activity
+    """
+    styles = {
+        'Running': {
+            'color': 'red' if str(row.get('Race', '')).lower() == 'race' else 'skyblue',
+            'size_metric': 'distance',
+            'label_metric': 'distance',
+            'label_format': lambda x: f"{x:.1f}",
+            'default_size': 300
+        },
+        'Cycling': {
+            'color': 'orange',
+            'size_metric': None,  # No scaling based on distance
+            'label_metric': 'distance',
+            'label_format': lambda x: f"{x:.1f}",
+            'default_size': 400
+        },
+        'Swimming': {
+            'color': 'lightblue',
+            'size_metric': None,
+            'label_metric': 'duration',
+            'label_format': lambda x: f"{x:.0f}m",
+            'default_size': 250
+        },
+        'Workouts': {
+            'color': 'green',
+            'size_metric': None,
+            'label_metric': 'duration',
+            'label_format': lambda x: f"{x:.0f}m",
+            'default_size': 200
+        }
+    }
+    
+    style = styles.get(activity_type, styles['Running'])
+    
+    # Calculate size
+    if style['size_metric'] == 'distance' and activity_type == 'Running':
+        size = distance_to_size(row['distance'])
+    else:
+        size = style['default_size']
+    
+    # Get label value
+    if style['label_metric'] in row:
+        label_value = row[style['label_metric']]
+        if style['label_metric'] == 'duration':
+            label_value = label_value / 60  # Convert seconds to minutes
+        label = style['label_format'](label_value)
+    else:
+        label = ""
+    
+    return {
+        'color': style['color'],
+        'size': size,
+        'label': label,
+        'metric': style['label_metric']
+    }
 
-def plot_calendar(activities, ax, config,year=None, month=None):
+def add_activity_circle(ax, x, y, row, activity_type, config, training_effect_length):
+    """
+    Adds a circle representing an activity to the plot.
+    
+    Parameters:
+        ax: matplotlib axis
+        x, y: position coordinates
+        row: DataFrame row containing activity data
+        activity_type: String indicating activity type
+        config: Configuration dictionary
+        training_effect_length: Maximum length for training effect labels
+    """
+    style = get_activity_style(activity_type, row, config)
+    
+    # Plot the circle
+    ax.scatter(x, y, s=style['size'], color=style['color'], 
+              edgecolor='k', alpha=0.7)
+    
+    # Add metric label inside the circle
+    if style['label']:
+        ax.text(x, y, style['label'], ha='center', va='center', fontsize=8)
+    
+    # Add training effect label if available
+    training_effect_label = row.get("trainingEffectLabel", "")
+    if isinstance(training_effect_label, str) and training_effect_label:
+        ax.text(x, y + 0.25, training_effect_label[:training_effect_length],
+                ha='center', va='top', fontsize=8, color='black')
+
+
+def plot_calendar(activities, ax, config, year=None, month=None):
     """
     Plots a calendar-style grid for a selected month (or last 4 weeks if no month/year given).
-    Each activity is a circle sized by distance, races in red, others in skyblue.
+    Each activity is a circle sized by distance (for running only), color-coded by activity type.
     Handles months with more than 28 days.
     """
-    if config.get("calendarplot", {}).get("includeRunning", True):
-        dfRunning = activities['Running']['Summary']
-    if config.get("calendarplot", {}).get("includeCycling", True):
-        dfCycling = activities['Cycling']['Summary']
-    if config.get("calendarplot", {}).get("includeSwimming", True):
-        dfSwimming = activities['Swimming']['Summary']
-    if config.get("calendarplot", {}).get("includeWorkOuts", True):
-        dfWorkOuts = activities['WorkOuts']['Summary']
-    if dfRunning.empty:
-        print("No running activities available for calendar plot.")
+    # Extract activity dataframes based on config
+    activity_data = {}
+    activity_types = ['Running', 'Cycling', 'Swimming', 'Workouts']
+    
+    for activity_type in activity_types:
+        config_key = f"include{activity_type}"
+        if config.get("calendarplot", {}).get(config_key, activity_type == 'Running'):
+            df = activities.get(activity_type, {}).get('Summary')
+            if df is not None and not df.empty:
+                activity_data[activity_type] = df
 
-    datePosition = float(config.get("calendarplot", {}).get("datePosition"))
+    if not activity_data:
+        print("No activities available for calendar plot.")
+        return {}
 
-    trainingEffectLength = int(config.get("calendarplot", {}).get("trainingEffectLength"))
+    datePosition = float(config.get("calendarplot", {}).get("datePosition", 0.5))
+    trainingEffectLength = int(config.get("calendarplot", {}).get("trainingEffectLength", 10))
     cell_to_date = {}  # (x, y) -> date
     if year is not None and month is not None:
         # Month calendar grid
         first_day = pd.Timestamp(year=year, month=month, day=1)
         last_day = pd.Timestamp(year=year, month=month, day=calendar.monthrange(year, month)[1])
-        df_month = dfRunning[(dfRunning.index >= first_day) & (dfRunning.index < last_day + pd.Timedelta(days=1))].copy()
-        df_month['date'] = df_month.index.date
+        
+        # Combine all activities for the month
+        all_month_activities = []
+        for activity_type, df in activity_data.items():
+            df_month = df[(df.index >= first_day) & (df.index < last_day + pd.Timedelta(days=1))].copy()
+            df_month['date'] = df_month.index.date
+            df_month['activity_type'] = activity_type
+            all_month_activities.append(df_month)
+        
+        if all_month_activities:
+            df_all_month = pd.concat(all_month_activities, ignore_index=False)
+        else:
+            df_all_month = pd.DataFrame()
 
         # Use calendar.monthcalendar to get the grid (weeks x 7 days)
         month_calendar = calendar.monthcalendar(year, month)
         n_weeks = len(month_calendar)
-        #fig, ax = plt.subplots(figsize=(14, 2.5 * n_weeks))
         ax.set_xlim(-0.5, 6.5)
         ax.set_ylim(-0.5, n_weeks - 0.5)
         ax.invert_yaxis()
@@ -176,46 +284,56 @@ def plot_calendar(activities, ax, config,year=None, month=None):
         ax.set_yticks(range(n_weeks))
         ax.set_xticklabels(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
 
-        # Calculate total distance for each week
+        # Calculate total distance for each week (running activities only)
         week_totals = []
         for i, week in enumerate(month_calendar):
             week_dates = [pd.Timestamp(year=year, month=month, day=day).date()
                             for day in week if day != 0]
-            week_dist = df_month[df_month['date'].isin(week_dates)]['distance'].sum()
+            if 'Running' in activity_data and not df_all_month.empty:
+                week_dist = df_all_month[
+                    (df_all_month['date'].isin(week_dates)) & 
+                    (df_all_month['activity_type'] == 'Running')
+                ]['distance'].sum()
+            else:
+                week_dist = 0
             week_totals.append(week_dist)
         ax.set_yticklabels([f"Week {i+1}\n{week_totals[i]:.1f} mi" for i in range(n_weeks)])
 
-        # Map each date to (week, day)
+        # Map each date to (week, day) and plot activities
         for i, week in enumerate(month_calendar):
             for j, day in enumerate(week):
                 if day == 0:
                     continue  # No day in this cell
                 day_date = pd.Timestamp(year=year, month=month, day=day).date()
                 cell_to_date[(j, i)] = day_date
+                
                 # Add the date label in the cell
                 ax.text(j, i+datePosition, pd.Timestamp(day_date).strftime('%b %d'),
                         ha='center', va='top', fontsize=10, color='black', fontweight='bold')
-                day_acts = df_month[df_month['date'] == day_date]
+                
+                # Get all activities for this day
+                day_acts = df_all_month[df_all_month['date'] == day_date] if not df_all_month.empty else pd.DataFrame()
                 n_acts = len(day_acts)
                 if n_acts == 0:
                     continue
-                offsets = np.linspace(0, 0.2, n_acts)
+                
+                # Calculate offsets for multiple activities
+                if n_acts == 1:
+                    offsets = np.linspace(j, j + 0.2, n_acts)
+                else:
+                    offsets = np.linspace(j - 0.2, j + 0.2, n_acts)
+                
+                # Plot each activity
                 for k, (_, row) in enumerate(day_acts.iterrows()):
-                    size = distance_to_size(row['distance'])
-                    color = 'red' if str(row.get('Race', '')).lower() == 'race' else 'skyblue'
-                    ax.scatter(j + offsets[k], i, s=size, color=color, edgecolor='k', alpha=0.7)
-                    ax.text(j + offsets[k], i, f"{row['distance']:.1f}", ha='center', va='center', fontsize=8)
-                trainingEffectLabel = row["trainingEffectLabel"]
-                if isinstance(trainingEffectLabel, str):
-                    ax.text(j + offsets[k], i+.25, trainingEffectLabel[0:trainingEffectLength],
-                            ha='center', va='top', fontsize=8, color='black')
+                    activity_type = row['activity_type']
+                    add_activity_circle(ax, offsets[k], i, row, activity_type, config, trainingEffectLength)
         # Draw grid
         for x in range(8):
             ax.axvline(x-0.5, color='gray', lw=0.5)
         for y in range(n_weeks + 1):
             ax.axhline(y-0.5, color='gray', lw=0.5)
 
-        ax.set_title(f'Running Activities: {calendar.month_name[month]} {year} (Calendar View)')
+        ax.set_title(f'Activities: {calendar.month_name[month]} {year} (Calendar View)')
         ax.set_xlabel('')
         ax.set_ylabel('')
         ax.tick_params(left=False, bottom=False)
@@ -223,17 +341,28 @@ def plot_calendar(activities, ax, config,year=None, month=None):
         
 
     else:
-        # Default: last 28 days ending with the most recent activity (as before)
-        #end_date = dfRunning.index.max().normalize()
+        # Default: last 28 days ending with current date
         end_date = pd.Timestamp(pd.Timestamp.now().date())
         start_date = end_date - pd.Timedelta(days=27)
-        df_4w = dfRunning[(dfRunning.index >= start_date) & (dfRunning.index < end_date + pd.Timedelta(days=1))].copy()
-        df_4w['date'] = df_4w.index.date
-        days = config.get("calendarplot", {}).get("calendar_days_shown")
+        
+        # Combine all activities for the period
+        all_period_activities = []
+        for activity_type, df in activity_data.items():
+            df_period = df[(df.index >= start_date) & (df.index < end_date + pd.Timedelta(days=1))].copy()
+            df_period['date'] = df_period.index.date
+            df_period['activity_type'] = activity_type
+            all_period_activities.append(df_period)
+        
+        if all_period_activities:
+            df_all_period = pd.concat(all_period_activities, ignore_index=False)
+        else:
+            df_all_period = pd.DataFrame()
+        
+        days = config.get("calendarplot", {}).get("calendar_days_shown", 28)
         all_dates = [end_date - pd.Timedelta(days=x) for x in reversed(range(days))]
         all_dates = [d.date() for d in all_dates]
         n_weeks = 4
-        #fig, ax = plt.subplots(figsize=(14, 2.5 * n_weeks))
+        
         ax.set_xlim(-0.5, 6.5)
         ax.set_ylim(-0.5, n_weeks - 0.5)
         ax.invert_yaxis()
@@ -244,44 +373,60 @@ def plot_calendar(activities, ax, config,year=None, month=None):
         rotated_labels = weekday_labels[first_weekday:] + weekday_labels[:first_weekday]
         ax.set_xticklabels(rotated_labels)
 
+        # Calculate weekly totals (running activities only)
         week_totals = []
         for week in range(4):
             week_start_idx = week * 7
             week_dates = all_dates[week_start_idx:week_start_idx + 7]
-            week_dist = df_4w[df_4w['date'].isin(week_dates)]['distance'].sum()
+            if 'Running' in activity_data:
+                week_dist = df_all_period[
+                    (df_all_period['date'].isin(week_dates)) & 
+                    (df_all_period['activity_type'] == 'Running')
+                ]['distance'].sum()
+            else:
+                week_dist = 0
             week_totals.append(week_dist)
         ax.set_yticklabels([f"Week {i+1}\n{week_totals[i]:.1f} mi" for i in range(4)])
 
+        # Map each date to the grid and plot activities
         for idx, day in enumerate(all_dates):
             week = idx // 7
             day_of_week = idx % 7
             cell_to_date[(day_of_week, week)] = day
+            
+            # Add the date label
             ax.text(day_of_week, week+datePosition, pd.Timestamp(day).strftime('%b %d'),
                     ha='center', va='top', fontsize=10, color='black', fontweight='bold')
-            day_acts = df_4w[df_4w['date'] == day]
+            
+            # Get all activities for this day
+            day_acts = df_all_period[df_all_period['date'] == day] if not df_all_period.empty else pd.DataFrame()
             n_acts = len(day_acts)
             if n_acts == 0:
                 continue
-            offsets = np.linspace(0, 0.2, n_acts)
+            
+            # Calculate offsets for multiple activities
+            if n_acts==1:
+                 offsets = np.linspace(day_of_week, day_of_week + 0.2, n_acts)
+            else:
+                offsets = np.linspace(day_of_week - 0.2, day_of_week + 0.2, n_acts)
+            
+            # Plot each activity
             for k, (_, row) in enumerate(day_acts.iterrows()):
-                size = distance_to_size(row['distance'])
-                color = 'red' if str(row.get('Race', '')).lower() == 'race' else 'skyblue'
-                ax.scatter(day_of_week + offsets[k], week, s=size, color=color, edgecolor='k', alpha=0.7)
-                ax.text(day_of_week + offsets[k], week, f"{row['distance']:.1f}", ha='center', va='center', fontsize=8)
+                activity_type = row['activity_type']
+                add_activity_circle(ax, offsets[k], week, row, activity_type, config, trainingEffectLength)
             
-            ax.text(day_of_week + offsets[k], week+.25, row["trainingEffectLabel"][0:trainingEffectLength],
-                    ha='center', va='top', fontsize=8, color='black')
-            
+        # Draw grid
         for x in range(8):
             ax.axvline(x-0.5, color='gray', lw=0.5)
         for y in range(5):
             ax.axhline(y-0.5, color='gray', lw=0.5)
 
-        ax.set_title(f'Running Activities: Ending {end_date.strftime("%Y-%m-%d")}')
+        ax.set_title(f'Activities: Last 28 Days Ending {end_date.strftime("%Y-%m-%d")}')
         ax.set_xlabel('')
         ax.set_ylabel('')
         ax.tick_params(left=False, bottom=False)
         plt.tight_layout()
+        
     return cell_to_date
 
 

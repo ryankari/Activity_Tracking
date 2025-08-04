@@ -137,12 +137,23 @@ def distance_to_size(distance, min_dist=2, max_dist=13, min_size=200, max_size=1
     return sizeOutput
 
 
-def plot_calendar(dfRunning, ax, config,year=None, month=None):
+def plot_calendar(activities, ax, config,year=None, month=None):
     """
     Plots a calendar-style grid for a selected month (or last 4 weeks if no month/year given).
     Each activity is a circle sized by distance, races in red, others in skyblue.
     Handles months with more than 28 days.
     """
+    if config.get("calendarplot", {}).get("includeRunning", True):
+        dfRunning = activities['Running']['Summary']
+    if config.get("calendarplot", {}).get("includeCycling", True):
+        dfCycling = activities['Cycling']['Summary']
+    if config.get("calendarplot", {}).get("includeSwimming", True):
+        dfSwimming = activities['Swimming']['Summary']
+    if config.get("calendarplot", {}).get("includeWorkOuts", True):
+        dfWorkOuts = activities['WorkOuts']['Summary']
+    if dfRunning.empty:
+        print("No running activities available for calendar plot.")
+
     datePosition = float(config.get("calendarplot", {}).get("datePosition"))
 
     trainingEffectLength = int(config.get("calendarplot", {}).get("trainingEffectLength"))
@@ -274,11 +285,11 @@ def plot_calendar(dfRunning, ax, config,year=None, month=None):
     return cell_to_date
 
 
-def plotSplits(df_splits, df_running, ax, activityId=None, config=None):
+def plotSplits(df_running_splits, df_running, ax, activityId=None, config=None):
     """
     Plots splits from the latest run.
     """
-    if df_splits.empty or df_running.empty:
+    if df_running_splits.empty or df_running.empty:
         print("No splits or running data available.")
         return
     
@@ -289,7 +300,7 @@ def plotSplits(df_splits, df_running, ax, activityId=None, config=None):
         activity_id = activityId
         
     print(f"Latest activity ID: {activity_id}")
-    latest_splits = df_splits[df_splits['activityId'].astype(str) == str(activity_id)]
+    latest_splits = df_running_splits[df_running_splits['activityId'].astype(str) == str(activity_id)]
 
     # Sort by split number if needed (assumes 'lapIndex' or similar exists)
     latest_splits = latest_splits.sort_values(by='lapIndex') if 'lapIndex' in latest_splits else latest_splits
@@ -316,9 +327,10 @@ def plotSplits(df_splits, df_running, ax, activityId=None, config=None):
 
     colors = ['tomato' if p < threshold else 'skyblue' for p in pace]
 
+    min = float(config.get("plotting", {}).get("split_ylim_min", 4.0))
+    max = float(config.get("plotting", {}).get("split_ylim_max", 10.0))
 
-
-    bars = ax.bar(lefts, 10 - pace, width=bar_widths, bottom=pace,
+    bars = ax.bar(lefts, max - pace, width=bar_widths, bottom=pace,
                 align='edge', color=colors, edgecolor='k')
     
     def format_pace(p):
@@ -345,8 +357,7 @@ def plotSplits(df_splits, df_running, ax, activityId=None, config=None):
     metricStr = time + "\n" + distance + " mi\n" + Pace + " min/mi\n" + elevationGain + " ft"
 
     
-    min = float(config.get("plotting", {}).get("split_ylim_min", 4.0))
-    max = float(config.get("plotting", {}).get("split_ylim_max", 10.0))
+
 
     #ax.set_ylim(max, min)  # Keep this so your axis still reflects your preferred orientation
     print(f"Setting y-axis limits to {min} - {max}")
@@ -364,7 +375,7 @@ def plotSplits(df_splits, df_running, ax, activityId=None, config=None):
     plt.tight_layout()
     
 
-    #print("Splits synced with df_summary with length = {} records".format(len(df_splits['activity_id'].unique())))
+    #print("Splits synced with df_summary with length = {} records".format(len(df_running_splits['activity_id'].unique())))
     #plt.show()
 
 def plot_TSS(df,df_daily,ax):

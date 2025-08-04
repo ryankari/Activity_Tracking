@@ -42,6 +42,7 @@ import matplotlib
 import json
 import importlib.resources
 
+from garmin_activity_tracker.workers import LoadDataWorker, AIWorker
 
 matplotlib.use("Qt5Agg")
 from garmin_activity_tracker.garmin_core import ActivityTracker
@@ -60,90 +61,32 @@ from garmin_activity_tracker.styles import (
     ai_running_style,
 )
 
-class LoadDataWorker(QThread):
-    progress = pyqtSignal(str)
-    finished = pyqtSignal(object, object, object)  # df_summary, df_running, df_splits
-    enable_sync_button = pyqtSignal()  # Signal to re-enable sync button
 
-    def __init__(self, tracker, use_api=False,config=None):
-        super().__init__()
-        self.tracker = tracker
-        self.use_api = use_api
-        self.config = config
-
-    def run(self):
-        try:
-            self.tracker.load_column_map()
-            if self.use_api==False: 
-                self.progress.emit("Loading local data without API...")
-            else:
-                self.progress.emit("Loading data from Garmin API...")    
-
-            max_activities = self.config.get("api", {}).get("max_activities")
-            batch_size = self.config.get("api", {}).get("batch_size")
-            self.df_summary = self.tracker.sync_summary_data(max_activities,batch_size,self.use_api)
-       
-            #self.df_summary = self.tracker.sync_summary_data(use_api=self.use_api)
-        except Exception as e:
-            self.progress.emit(f"Error during sync summary or with signal_map.json: {e}")
-            self.finished.emit(None, None, None)
-            return
-        try:
-            #if self.df_summary == []:
-            if not isinstance(self.df_summary, pd.DataFrame) or self.df_summary.empty:
-                self.progress.emit("No activities found. Please sync with Garmin API.")
-                self.finished.emit(None, None, None)
-                self.enable_sync_button.emit()  # Signal to re-enable sync button
-                return
-                  
-            self.progress.emit("Preprocessing local running data...")
-            self.df_running = self.tracker.preprocess_running_data(self.df_summary.copy(),self.config)
-        except Exception as e:
-            self.progress.emit(f"Error during preprocessing: {e}")
-            self.finished.emit(None, None, None)
-            return
-        try:
-            self.progress.emit("Syncing local split data...")
-            self.df_splits = self.tracker.sync_split_data(self.df_running, use_api=self.use_api)
-            self.progress.emit("Data load complete.")
-            self.progress.emit("Press Sync Latest Data to download new data.")
-            self.finished.emit(self.df_summary, self.df_running, self.df_splits)
-        except Exception as e:
-            self.progress.emit(f"Error during data load: {e}")
-            self.finished.emit(None, None, None)
-        return
-
-class AIWorker(QThread):
-    chunk_ready = pyqtSignal(str)
-    finished = pyqtSignal(str)
-
-    def __init__(self, prompt_content, model=None):
-        super().__init__()
-        self.prompt_content = prompt_content
-        self.model = model
-
-    def run(self):
-        try:
-            from ollama import chat  # Import here to avoid issues if not installed
-
-            messages = [{"role": "user", "content": self.prompt_content}]
-            ai_response = ""
-            for chunk in chat(model=self.model, messages=messages, stream=True):
-                text = chunk["message"]["content"]
-                ai_response += text
-                self.chunk_ready.emit(text)
-            self.finished.emit(ai_response)
-        except Exception as e:
-            self.finished.emit(f"<b>Error:</b> {e}")
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Activity Tracker")
-        self.setGeometry(100, 100, 1250, 800)
-        self.config = None
 
+        # Get screen size and DPI
+        screen = QApplication.primaryScreen()
+        screen_geometry = screen.availableGeometry()
+        dpi = screen.logicalDotsPerInch()
+
+        # Calculate scaling factor based on DPI (96 DPI is standard)
+        scale_factor = dpi / 96.0
+
+        # Dynamically set window size (e.g., 80% of screen width and height)
+        width = int(screen_geometry.width() * 0.8)
+        height = int(screen_geometry.height() * 0.8)
+        self.resize(width, height)
+
+        # Center the window on the screen
+        self.move(
+            (screen_geometry.width() - width) // 2,
+            (screen_geometry.height() - height) // 2,
+        )
+        self.config = None
 
         def load_config(filename="config_information.json"):
             try:
@@ -175,7 +118,7 @@ class MainWindow(QMainWindow):
             ("Advanced Metrics", self.plot_advanced_metrics),
             ("TSS", self.plot_tss),
             ("Plot Races", self.plot_races),
-            ("Calendar", self.plot_calendar),
+            ("Calendar", self.plot_calendar_func),
             ("Sync Latest Data", self.sync_latest_data),
             ("Back to Calendar", self.back_to_calendar),
         ]:
@@ -295,10 +238,14 @@ class MainWindow(QMainWindow):
 
         # --- Data ---
         self.tracker = None
-        self.df_summary = None
-        self.df_running = None
-        self.df_splits = None
-        self.df_tss = None
+        self.activities = {}
+        self.activities['All'] = {None}
+        self.activities["Running"] = {'Summary':None, 'Splits':None, 'TSS':None}
+        self.activities["Cycling"] = {'Summary':None, 'Splits':None, 'TSS':None}
+        #self.df_summary = None
+        #self.df_running = None
+        #self.df_running_splits = None
+        #self.df_tss = None
         print(self.get_ollama_models())
         self.load_data_async(use_api=False)
 
@@ -346,8 +293,6 @@ class MainWindow(QMainWindow):
         self.load_data_async(use_api=True)
 
     def load_data_async(self, use_api=False):
-
-
         if use_api:
             username, password = self.get_garmin_credentials()
             if not username or not password:
@@ -369,26 +314,23 @@ class MainWindow(QMainWindow):
         self.load_worker.start()
 
 
-    def handle_data_loaded(self, df_summary, df_running, df_splits):
-        if df_summary is None:
+    def handle_data_loaded(self, activities):
+        if activities is None:
             self.console.append("Data load failed.")
             return
-        
-        self.df_summary = df_summary
-        self.df_running = df_running
-        self.df_splits = df_splits
-        
+        self.activities = activities
+
         # Check if we have valid data
-        if self.df_running is None or self.df_running.empty:
+        if activities['Running']['Summary'] is None or activities['Running']['Summary'].empty:
             self.console.append("No running data available.")
             return
-            
-        if self.df_splits is None:
+
+        if activities['Running']['Splits'] is None:
             self.console.append("Warning: No splits data available.")
-            self.df_splits = pd.DataFrame()  # Initialize as empty DataFrame
+            self.activities['Running']['Splits'] = None  # Initialize as empty DataFrame
         
-        self.df_tss = self.tracker.calculate_tss(self.df_running, self.config)
-        self.plot_calendar(year=None, month=None)  # Default to last 28 days
+        self.df_tss = self.tracker.calculate_tss(self.activities['Running']['Summary'], self.config)
+        self.plot_calendar_func(year=None, month=None)  # Default to last 28 days
         self.plot_buttons["Sync Latest Data"].setStyleSheet(modern_button_style)
         for btn in self.plot_buttons.values():
             btn.setEnabled(True)
@@ -405,28 +347,27 @@ class MainWindow(QMainWindow):
     def plot_tss(self):
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        plot_TSS(self.df_running,self.df_tss, ax)
+        plot_TSS(self.activities['Running']['Summary'], self.df_tss, ax)
         self.canvas.draw()
 
     def plot_basic_metrics(self):
         self.clear_figure()
         axes = self.figure.subplots(3, 1, sharex=True)  # 3 rows, 1 column
-        create_basic_metric_plot(self.df_running, axes, show_trend=True)
+        create_basic_metric_plot(self.activities['Running']['Summary'], axes, show_trend=True)
         self.canvas.draw()
 
     def plot_advanced_metrics(self):
         self.clear_figure()
         axes = self.figure.subplots(3, 1, sharex=True)  # 3 rows, 1 column
-        createAdvancedMetricPlot(self.df_running, axes, show_trend=True)
+        createAdvancedMetricPlot(self.activities['Running']['Summary'], axes, show_trend=True)
         self.canvas.draw()
 
     def plot_splits(self):
-        print("Splits button clicked")
         self.clear_figure()
         ax = self.figure.add_subplot(111)
         
-        # Check if splits data is available
-        if self.df_splits is None or self.df_splits.empty:
+        splits = self.activities['Running']['Splits']
+        if splits is None or splits.empty:
             ax.text(
                 0.5, 0.5, "No splits data available.\nTry syncing with Garmin API to download splits.", 
                 ha="center", va="center"
@@ -435,7 +376,7 @@ class MainWindow(QMainWindow):
             self.canvas.draw()
             return
             
-        plotSplits(self.df_splits, self.df_running, ax, self.config)
+        plotSplits(splits, self.activities['Running']['Summary'], ax, self.config)
         self.plot_buttons["Back to Calendar"].show()
         self.canvas.draw()
 
@@ -444,7 +385,8 @@ class MainWindow(QMainWindow):
         ax = self.figure.add_subplot(111)
         
         # Check if splits data is available and has the required column
-        if self.df_splits is None or self.df_splits.empty:
+        splits = self.activities['Running']['Splits']
+        if splits is None or splits.empty:
             ax.text(
                 0.5, 0.5, "No splits data available.\nTry syncing with Garmin API to download splits.", 
                 ha="center", va="center"
@@ -453,7 +395,7 @@ class MainWindow(QMainWindow):
             self.canvas.draw()
             return
             
-        if 'activityId' not in self.df_splits.columns:
+        if 'activityId' not in splits.columns:
             ax.text(
                 0.5, 0.5, "Splits data missing activityId column.\nTry syncing with Garmin API.", 
                 ha="center", va="center"
@@ -463,35 +405,40 @@ class MainWindow(QMainWindow):
             return
         
         # Filter splits for the selected activity
-        splits = self.df_splits[self.df_splits["activityId"].astype(str) == str(activity_id)]
-        activity = self.df_running[self.df_running["activityId"].astype(str) == str(activity_id)]
+        splits = splits[splits["activityId"].astype(str) == str(activity_id)]
+        activity_summary = self.activities['Running']['Summary'][
+        self.activities['Running']['Summary']["activityId"].astype(str) == str(activity_id)
+        ]
+
         self.plot_buttons["Back to Calendar"].show()
         
-        if splits.empty:
+        if activity_summary.empty:
             ax.text(
                 0.5, 0.5, "No splits found for this activity.", ha="center", va="center"
             )
         else:
-            plotSplits(self.df_splits, self.df_running, ax, activityId=activity_id, config=self.config)
+            plotSplits(splits, activity_summary, ax, activityId=activity_id, config=self.config)
         self.canvas.draw()
 
     def plot_races(self):
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        plot_race_performance(self.df_running, ax, self.config)
+        plot_race_performance(self.activities['Running']['Summary'], ax, self.config)
         self.canvas.draw()
         
 
-    def plot_calendar(self, year=None, month=None):
+    def plot_calendar_func(self, year=None, month=None):
         if year is not None and month is not None:
             self.last_calendar_year = year
             self.last_calendar_month = month
             self.last_calendar_mode = "month"
         else:
             self.last_calendar_mode = "last28"
+
         self.clear_figure()
         ax = self.figure.add_subplot(111)
-        self.calendar_dates = plot_calendar(self.df_running, ax, self.config, year=year, month=month)
+
+        self.calendar_dates = plot_calendar(self.activities, ax, self.config, year=year, month=month)
         self.canvas.draw()
         self.canvas.mpl_connect("button_press_event", self.on_calendar_click)
         self.plot_buttons["Back to Calendar"].hide()
@@ -499,7 +446,7 @@ class MainWindow(QMainWindow):
     def update_calendar_from_selector(self):
         year = int(self.year_combo.currentText())
         month = self.month_combo.currentData()
-        self.plot_calendar(year=year, month=month)
+        self.plot_calendar_func(year=year, month=month)
 
     def back_to_calendar(self):
         if getattr(self, "last_calendar_mode", "last28") == "month":
@@ -510,12 +457,12 @@ class MainWindow(QMainWindow):
                 if self.month_combo.itemData(i) == self.last_calendar_month:
                     self.month_combo.setCurrentIndex(i)
                     break
-            self.plot_calendar(
+            self.plot_calendar_func(
                 year=self.last_calendar_year, month=self.last_calendar_month
             )
         else:
             # Restore the last 28 days view
-            self.plot_calendar(year=None, month=None)
+            self.plot_calendar_func(year=None, month=None)
 
     def on_calendar_click(self, event):
         # Only respond if the calendar is currently shown
@@ -526,7 +473,7 @@ class MainWindow(QMainWindow):
             x, y = int(round(event.xdata)), int(round(event.ydata))
             clicked_date = self.calendar_dates.get((x, y))
             if clicked_date:
-                activities = self.df_running[self.df_running.index.date == clicked_date]
+                activities = self.activities['Running']['Summary'][self.activities['Running']['Summary'].index.date == clicked_date]
                 if not activities.empty:
                     if len(activities) == 1:
                         activity_id = activities.iloc[0]["activityId"]
@@ -552,8 +499,7 @@ class MainWindow(QMainWindow):
 
     def initiateAIChat(self):
         print("Initiating AI Chat")
-        # Example usage in your AI call
-        
+   
         # Clear console and chat history
         self.console.clear()
         self.conversation_history = []
@@ -561,7 +507,7 @@ class MainWindow(QMainWindow):
         self.conversation_history.append(f"User: {user_msg}")
 
         # Prepare prompt for AI
-        prompt_content, _ = AI_format(self.df_running, self.df_splits, self.df_tss, self.config)
+        prompt_content, _ = AI_format(self.activities['Running']['Summary'], self.activities['Running']['Splits'], self.activities['Running']['TSS'], self.config)
         if prompt_content.startswith("ERROR:"):
             self.console.append(prompt_content)  # Or however you display messages
             return  # Exit the function, don't proceed with AI call
@@ -601,7 +547,7 @@ class MainWindow(QMainWindow):
         self.console.append(f"<b>You:</b> {user_msg}")
         self.conversation_history.append(f"User: {user_msg}")
         # Prepare prompt for AI
-        prompt_content, _ = AI_format(self.df_running, self.df_splits, self.df_tss, self.config)
+        prompt_content, _ = AI_format(self.activities['Running']['Summary'], self.activities['Running']['Splits'], self.df_tss, self.config)
         prompt_content += "\n" + "\n".join(self.conversation_history)
         try:
             self.plot_buttons["Chat with AI Coach"].show()
@@ -660,5 +606,3 @@ def run_app():
     sys.exit(app.exec_())
 
 
-if __name__ == "__main__":
-    run_app()

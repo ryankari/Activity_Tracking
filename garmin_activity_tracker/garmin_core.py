@@ -291,7 +291,7 @@ class ActivityTracker :
     def preprocess_running_data(self, df, config=None):
         self.config = config
         
-        print(f"Starting preprocessing with {len(df)} records")
+        print(f"Starting running preprocessing with {len(df)} records")
         
         if df.empty:
             print("ERROR: Empty DataFrame passed to preprocess_running_data")
@@ -366,6 +366,59 @@ class ActivityTracker :
             raise
             
         return df
+
+
+
+    def preprocess_cycling_data(self, df, config=None):
+        self.config = config
+        
+        print(f"Starting cycling preprocessing with {len(df)} records")
+        
+        if df.empty:
+            print("ERROR: Empty DataFrame passed to preprocess_cyclingdata")
+            return df
+        
+        activity_list = df['activityType'].tolist()
+        
+        df['Type'] = self.extract_typekey_list(df['activityType'])
+        df['Race'] = self.extract_typekey_list(df['eventType'])
+        
+        df = df[(df['Type'].str.lower() == 'cycling')].reset_index(drop=True)
+        print(f"After filtering for cycling activities: {len(df)} records")
+        
+        if df.empty:
+            print("WARNING: No cycling activities found after filtering")
+            return df
+            
+        Pace = []
+        VO2 = []
+        TSSArray = []
+        df['duration_str'] = df['duration'].apply(lambda x: str(datetime.timedelta(seconds=int(x))))
+        
+        df['startTimeLocal'] = pd.to_datetime(df['startTimeLocal'], errors='coerce')
+        df = df.set_index('startTimeLocal')
+        df['distance'] = df['distance'] * 0.00062137
+
+        for index, row in df.iterrows():
+            try:
+                if isinstance(row['duration'], str):
+                    t = datetime.datetime.strptime(row['duration'], '%H:%M:%S')
+
+                total_min = row['duration'] / 60
+                pace = total_min / row['distance']
+                #vo2 =
+                #TSS = 
+                    
+                Pace.append(pace)
+                #VO2.append(vo2)
+                #TSSArray.append(TSS)
+            except Exception as e:
+                print(f"Error on row {index}: {e}")
+                Pace.append(np.nan)
+                #VO2.append(np.nan)
+
+        return df
+
 
     def calculate_tss(self, df, config=None):
         df_tss = df.reset_index()

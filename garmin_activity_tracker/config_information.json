@@ -14,7 +14,11 @@
         "calendar_days_shown": 28,
         "font_size": 10,
         "datePosition": -0.36,
-        "trainingEffectLength":12
+        "trainingEffectLength":12,
+        "includeRunning": true,
+        "includeCycling": true,
+        "includeSwimming": false,
+        "includeWorkOuts": false
     },
     "tss": {
         "threshold_pace_min_per_mi": 6.25,
@@ -31,7 +35,7 @@
         "race_ylim_min": 6,
         "race_ylim_max": 10.0,
         "split_ylim_min": 4,
-        "split_ylim_max": 10
+        "split_ylim_max": 11
     },
     "AI_format": {
         "total_summary_files": 50,

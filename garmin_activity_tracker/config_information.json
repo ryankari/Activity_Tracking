@@ -21,6 +21,7 @@
         "includeWorkOuts": false
     },
     "tss": {
+        "weight_lbs": 170,
         "threshold_pace_min_per_mi": 6.25,
         "gain_factor": 0.0005,
         "loss_factor": 0.00015,

@@ -26,25 +26,27 @@ A Python desktop tool for analyzing and visualizing running activities using Gar
 To provide athletes and endurance enthusiasts with a means of tracking our data and fitness over the long term.
 While focused on Garmin, the intention is to retrieve data, store it locally, and provide an agnostic means of tracking and analyzing our data. 
 
+![alt text](docs/image-1.png)
 ## Data Flow
 
 ```mermaid
 flowchart TD
     A[User Launches App] --> B{Credentials Set?}
-    B -- Yes --> C[Load Data from Garmin]
+    B -- Yes --> C[Sync Data from Garmin]
     B -- No --> D[Prompt for Credentials]
-    C --> C1[client.get_activities]
-    C --> C2[client.get_activity_splits]
-    C1 --> EE[Store Data in Excel Files]
-    C2 --> EE
-    EE --> F[Visualize Data in GUI]
-    F --> G[User Interacts with Plots/Calendar]
-    G --> H[Chat with AI Coach]
-    H --> I[Ollama Model]
-    I--> J[Console]
-    J--> H
-    C --|Optionally|--> K[Work Locally with Existing Data]
-    K --> F
+    C --> E[Process Activities Running, Cycling, Workouts, etc.]
+    C --> E[Process Activities: Running, Cycling, Workouts, etc.]
+    E --> F[Store Data Locally: Excel]
+    F --> G[Visualize in GUI: Calendar, Plots]
+    G --> H[User Interacts with Calendar/Plots]
+    H --> I[Select Activity or Date]
+    I --> J[Show Splits, Details, or Trends]
+    G --> K[Chat with AI Coach]
+    K --> L[Ollama Model]
+    L --> M[Console Live AI Chat]
+    M --> K
+    C --|Optionally|--> N[Work Locally with Existing Data]
+    N --> F
 ```
 
 ---
@@ -60,7 +62,7 @@ Files created if don't already exist
 
 1. **Set environment variables:**
     - `GARMIN_USERNAME` and `GARMIN_PASSWORD`
-    - Optionally, `GARMIN_USE_API=0` to work locally without downloading new data
+
 2. **Install dependencies:**
     ```sh
     pip install -r requirements.txt
@@ -74,6 +76,7 @@ Tested with:
       ```sh
       python main.py
       ```
+    - Use start_activity_tracker.bat 
 5. **Sync and visualize your data**
 6. **Chat with the AI coach** for personalized insights
 
@@ -100,19 +103,16 @@ Tested with:
 
 ---
 
+## For Fitness Enthusiasts & Professionals
+- No coding required: The app is ready to use out of the box. Just install Python and the required packages.
+- Data privacy: All your activity data stays on your computer.
+- AI-powered insights: Get training advice, analyze trends, and ask questions in plain English.
+- Customizable: Advanced users can tweak configuration files to adjust plots, metrics, and AI prompts.
+- Support for multiple activity types: Not just running—cycling, swimming, and workouts are supported and visualized.
+
 ## Development & Testing
 
 - All code is organized in the `garmin_activity_tracker/` package.
-- Tests are in the `tests/` directory and can be run with:
-    ```sh
-    pytest
-    ```
-- Code formatting is enforced with [Black](https://black.readthedocs.io/en/stable/):
-    ```sh
-    pip install black
-    ```
-
----
 
 ## Contributing
 

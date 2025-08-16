@@ -510,7 +510,7 @@ def plotSplits(df_running_splits, df_running, ax, activityId=None, config=None):
     ax.set_ylim(min, max)  # Keep this so your axis still reflects your preferred orientation
 
     ax.text(0.01,0.99, metricStr, transform=ax.transAxes, fontsize=12,
-            verticalalignment='top', horizontalalignment='left',bbox=dict(boxstyle='round',facecolor='wheat', alpha=0.5))
+            verticalalignment='top', horizontalalignment='left',bbox=dict(boxstyle='round,pad=0.3',facecolor='wheat', alpha=0.85))
     ax.set_xlabel('Distance (miles)')
     ax.set_ylabel('Time (min/mile)')
     activityName = df_running[df_running['activityId'] == activity_id]['activityName'].astype(str).values[0]

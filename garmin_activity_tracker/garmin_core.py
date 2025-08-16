@@ -320,14 +320,23 @@ class ActivityTracker :
         df = df.set_index('startTimeLocal')
         df['distance'] = df['distance'] * 0.00062137
 
+        WEIGHT_CONST = float(config.get("tss", {}).get("weight_lb", 170))
+        weight_kg = WEIGHT_CONST / 2.20462
         for index, row in df.iterrows():
+
             try:
                 if isinstance(row['duration'], str):
                     t = datetime.datetime.strptime(row['duration'], '%H:%M:%S')
 
                 total_min = row['duration'] / 60
                 pace = total_min / row['distance']
-                vo2 = 108.844 - 0.1636 * (170 / 2.2) - (1.438 * pace) - (0.1928 * float(row['averageHR']))
+
+                baseline = 108.844
+                weight_penalty = 0.1636 * weight_kg # Higher weight results in lower VO2
+                pace_penalty = (1.438 * pace) #Faster pace (slower pace) results in lower VO2
+                HR_penalty = 0.1928 * float(row['averageHR']) #Higher HR results in lower VO2
+                vo2 = baseline - weight_penalty - pace_penalty - HR_penalty
+                
                 TSS = self.estimate_rTSS_miles( 
                     distance_mi=row['distance'],
                     elevation_gain_ft=row.get('elevationGain', 0),

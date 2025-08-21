@@ -18,7 +18,7 @@
         "includeRunning": true,
         "includeCycling": true,
         "includeSwimming": false,
-        "includeWorkOuts": false
+        "includeWorkouts": true
     },
     "tss": {
         "weight_lbs": 170,
@@ -43,5 +43,36 @@
         "total_split_files":3,
         "hms_threshold_limit": 90,
         "create_prompt_only": false
+    },
+    "activity_styles": {
+        "Running": {
+            "color_race": "red",
+            "color": "skyblue",
+            "size_metric": "distance",
+            "label_metric": "distance",
+            "label_format": "{:.1f}",
+            "default_size": 300
+        },
+        "Cycling": {
+            "color": "orange",
+            "size_metric": null,
+            "label_metric": "distance",
+            "label_format": "{:.1f}",
+            "default_size": 400
+        },
+        "Swimming": {
+            "color": "lightblue",
+            "size_metric": null,
+            "label_metric": "duration",
+            "label_format": "{:.0f}",
+            "default_size": 250
+        },
+        "Workouts": {
+            "color": "green",
+            "size_metric": null,
+            "label_metric": "duration",
+            "label_format": "{:.0f}",
+            "default_size": 250
+        }
     }
 }

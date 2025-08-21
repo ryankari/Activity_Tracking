@@ -135,72 +135,41 @@ def distance_to_size(distance, min_dist=2, max_dist=13, min_size=200, max_size=1
     # Linear interpolation
     sizeOutput = min_size + (max_size - min_size) * ((distanceScaled - min_dist) / (max_dist - min_dist))
     return sizeOutput
-
 def get_activity_style(activity_type, row, config):
     """
     Returns style information (color, size, label) for different activity types.
-    
-    Parameters:
-        activity_type: String indicating the activity type ('Running', 'Cycling', 'Swimming', 'Workouts')
-        row: DataFrame row containing activity data
-        config: Configuration dictionary
-    
-    Returns:
-        dict: Contains 'color', 'size', 'label', 'metric' for the activity
     """
-    styles = {
-        'Running': {
-            'color': 'red' if str(row.get('Race', '')).lower() == 'race' else 'skyblue',
-            'size_metric': 'distance',
-            'label_metric': 'distance',
-            'label_format': lambda x: f"{x:.1f}",
-            'default_size': 300
-        },
-        'Cycling': {
-            'color': 'orange',
-            'size_metric': None,  # No scaling based on distance
-            'label_metric': 'distance',
-            'label_format': lambda x: f"{x:.1f}",
-            'default_size': 400
-        },
-        'Swimming': {
-            'color': 'lightblue',
-            'size_metric': None,
-            'label_metric': 'duration',
-            'label_format': lambda x: f"{x:.0f}m",
-            'default_size': 250
-        },
-        'Workouts': {
-            'color': 'green',
-            'size_metric': None,
-            'label_metric': 'duration',
-            'label_format': lambda x: f"{x:.0f}m",
-            'default_size': 200
-        }
-    }
-    
-    style = styles.get(activity_type, styles['Running'])
-    
+    style_cfg = config.get("activity_styles", {}).get(activity_type, {})
+    # Handle race color for running
+    if activity_type == "Running" and str(row.get('Race', '')).lower() == 'race':
+        color = style_cfg.get("color_race", "red")
+    else:
+        color = style_cfg.get("color", "skyblue")
+    size_metric = style_cfg.get("size_metric")
+    default_size = style_cfg.get("default_size", 300)
+    label_metric = style_cfg.get("label_metric", "distance")
+    label_format = style_cfg.get("label_format", "{:.1f}")
+
     # Calculate size
-    if style['size_metric'] == 'distance' and activity_type == 'Running':
+    if size_metric == "distance" and activity_type == "Running":
         size = distance_to_size(row['distance'])
     else:
-        size = style['default_size']
-    
+        size = default_size
+
     # Get label value
-    if style['label_metric'] in row:
-        label_value = row[style['label_metric']]
-        if style['label_metric'] == 'duration':
+    if label_metric in row:
+        label_value = row[label_metric]
+        if label_metric == "duration":
             label_value = label_value / 60  # Convert seconds to minutes
-        label = style['label_format'](label_value)
+        label = label_format.format(label_value)
     else:
         label = ""
-    
+
     return {
-        'color': style['color'],
-        'size': size,
-        'label': label,
-        'metric': style['label_metric']
+        "color": color,
+        "size": size,
+        "label": label,
+        "metric": label_metric
     }
 
 def add_activity_circle(ax, x, y, row, activity_type, config, training_effect_length):
@@ -244,7 +213,8 @@ def plot_calendar(activities, ax, config, year=None, month=None):
     
     for activity_type in activity_types:
         config_key = f"include{activity_type}"
-        if config.get("calendarplot", {}).get(config_key, activity_type == 'Running'):
+        checkTypebool = config.get("calendarplot", {}).get(config_key)
+        if checkTypebool:
             df = activities.get(activity_type, {}).get('Summary')
             if df is not None and not df.empty:
                 activity_data[activity_type] = df

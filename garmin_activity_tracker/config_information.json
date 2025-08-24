@@ -39,7 +39,7 @@
         "split_ylim_max": 11
     },
     "AI_format": {
-        "total_summary_files": 50,
+        "total_summary_files": 25,
         "total_split_files":3,
         "hms_threshold_limit": 90,
         "create_prompt_only": false

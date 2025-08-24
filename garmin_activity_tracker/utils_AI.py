@@ -70,7 +70,7 @@ def AI_format(activities, config):
     dfInput = df.head(total_summary_files).copy().reset_index()
     dataSimple = pd.DataFrame({})
     dataSimple['distance [miles]'] = dfInput['distance']
-    dataSimple['duration [minutes]'] = np.round(dfInput['elapsedDuration']/60, 1)
+    dataSimple['duration [minutes]'] = np.round(dfInput['duration']/60, 1)
     dataSimple['avg pace [min per mile]'] = np.round(dataSimple['duration [minutes]'] / dataSimple['distance [miles]'], 1)
     dataSimple['avg Heart Rate'] = np.round(dfInput['averageHR'], 1)
     dataSimple['Date'] = dfInput['startTimeLocal'].dt.strftime('%Y-%m-%d')
@@ -200,7 +200,7 @@ def get_historical_summary(df, config, max_years=10):
         # Find marathons and half marathons
         marathons = df_year[(df_year['Race']=='race') & (df_year['distance'] >= 26.0) & (df_year['distance'] <= 26.5)]
         hms = df_year[(df_year['Race']=='race') & (df_year['distance'] >= 13) & (df_year['distance'] <= 13.3)]
-        hms_thresh = hms[hms['elapsedDuration'] <= hms_threshold_limit*60]
+        hms_thresh = hms[hms['duration'] <= hms_threshold_limit*60]
 
         # Average TSS per week
         if 'TSS' in df_year.columns:
@@ -217,11 +217,11 @@ def get_historical_summary(df, config, max_years=10):
         if len(hms_thresh) > 0:
             parts.append(f"{len(hms_thresh)}x sub-{hms_threshold_limit} min HM")
         elif len(hms) > 0:
-            avg_hm_time = hms['elapsedDuration'].mean() / 60  # Convert to minutes
+            avg_hm_time = hms['duration'].mean() / 60  # Convert to minutes
             parts.append(f"{len(hms)} half marathons with average time of {int(avg_hm_time)} minutes")
         
         if len(marathons) > 0:
-            avg_marathon_time = marathons['elapsedDuration'].mean() / 60  # Convert to minutes
+            avg_marathon_time = marathons['duration'].mean() / 60  # Convert to minutes
             parts.append(f"{len(marathons)}x marathon with average time of {int(avg_marathon_time)} minutes")
         
         if avg_tss_week > 0:

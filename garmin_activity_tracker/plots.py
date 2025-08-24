@@ -47,7 +47,6 @@ def create_basic_metric_plot(df, ax, show_trend=True):
         axis.set_xlim([earliest_date, latest_date])
 
     plt.tight_layout()
-    #plt.show()
 
 def create_summary_plot(df_summary):
     if 'startTimeLocal' in df_summary.columns:
@@ -58,8 +57,6 @@ def create_summary_plot(df_summary):
         return
     monthly_distance = df_summary.resample('ME')['distance'].sum()
     create_basic_metric_plot(df_summary, monthly_distance)
-
-
 
 
 def createAdvancedMetricPlot(df, ax, show_trend=True):
@@ -303,7 +300,13 @@ def plot_calendar(activities, ax, config, year=None, month=None):
         for y in range(n_weeks + 1):
             ax.axhline(y-0.5, color='gray', lw=0.5)
 
-        ax.set_title(f'Activities: {calendar.month_name[month]} {year} (Calendar View)')
+        # Calculate total miles for running activities in the month
+        if 'Running' in activity_data and not df_all_month.empty:
+            df_running_month = df_all_month[df_all_month['activity_type'] == 'Running']
+            total_miles = df_running_month['distance'].sum()
+        else:
+            total_miles = 0
+        ax.set_title(f'Activities: {calendar.month_name[month]} {year} - {total_miles:.1f} miles')
         ax.set_xlabel('')
         ax.set_ylabel('')
         ax.tick_params(left=False, bottom=False)
@@ -390,8 +393,13 @@ def plot_calendar(activities, ax, config, year=None, month=None):
             ax.axvline(x-0.5, color='gray', lw=0.5)
         for y in range(5):
             ax.axhline(y-0.5, color='gray', lw=0.5)
-
-        ax.set_title(f'Activities: Last 28 Days Ending {end_date.strftime("%Y-%m-%d")}')
+        # Filter for running activities only from the period
+        if 'Running' in activity_data and not df_all_period.empty:
+            df_running_period = df_all_period[df_all_period['activity_type'] == 'Running']
+            total_miles = df_running_period['distance'].sum()
+        else:
+            total_miles = 0
+        ax.set_title(f'Activities: Last 28 Days Ending {end_date.strftime("%Y-%m-%d")} - {total_miles:.1f} miles')
         ax.set_xlabel('')
         ax.set_ylabel('')
         ax.tick_params(left=False, bottom=False)
@@ -428,16 +436,12 @@ def plotSplits(df_running_splits, df_running, ax, activityId=None, config=None):
     distances = latest_splits['distance'] * 0.00062137  # convert meters to miles if needed
 
     # Plot
-    #import matplotlib.pyplot as plt
-    #import numpy as np
-    #fig, ax = plt.subplots(figsize=(10, 4))
     bar_widths = distances / distances.max()  # scale widths for visual clarity
 
     # Compute center positions for variable-width bars
     lefts = np.cumsum(np.insert(bar_widths[:-1], 0, 0))
     pace =  (durations/60) / distances
-    #ax.bar(lefts, pace, width=bar_widths, align='edge', color='skyblue', edgecolor='k',bottom=10)
-
+   
     threshold = float(config.get("plotting", {}).get("split_threshold", 7.0))
 
     colors = ['tomato' if p < threshold else 'skyblue' for p in pace]
@@ -471,13 +475,9 @@ def plotSplits(df_running_splits, df_running, ax, activityId=None, config=None):
     elevationGain = str(np.round(df_running[df_running['activityId'] == activity_id]['elevationGain'].values[0]*3.28,1))
     metricStr = time + "\n" + distance + " mi\n" + Pace + " min/mi\n" + elevationGain + " ft"
 
-    
-
-
-    #ax.set_ylim(max, min)  # Keep this so your axis still reflects your preferred orientation
     print(f"Setting y-axis limits to {min} - {max}")
 
-    ax.set_ylim(min, max)  # Keep this so your axis still reflects your preferred orientation
+    ax.set_ylim(min, max)  
 
     ax.text(0.01,0.99, metricStr, transform=ax.transAxes, fontsize=12,
             verticalalignment='top', horizontalalignment='left',bbox=dict(boxstyle='round,pad=0.3',facecolor='wheat', alpha=0.85))
@@ -490,14 +490,11 @@ def plotSplits(df_running_splits, df_running, ax, activityId=None, config=None):
     plt.tight_layout()
     
 
-    #print("Splits synced with df_summary with length = {} records".format(len(df_running_splits['activity_id'].unique())))
-    #plt.show()
 
 def plot_TSS(df,df_daily,ax):
     """
     Plots TSS (Training Stress Score) over time.
     """
-    #plt.figure(figsize=(12, 6))
     ax.plot(df_daily['startTimeLocal'], df_daily['ctl'], label='CTL Chronic Training Load', linewidth=2)
     ax.plot(df_daily['startTimeLocal'], df_daily['atl'], label='ATL Acute Training Load', linewidth=2,alpha=0.5)
     ax.plot(df_daily['startTimeLocal'], df_daily['tsb'], label='TSB Training Stress Balance', linestyle='--', linewidth=2)

@@ -11,7 +11,7 @@ Your task is to analyze the runner's latest training data below and give:
 1. An evaluation of the training load (based on TSS and pacing)
 2. Feedback on average and recent pacing trends
 3. Insights into overtraining, fitness progression, or undertraining
-4. Specific feedback on the last 2 workouts and their splits
+4. Specific feedback on the last 3 workouts considering splits and heart rate
 5. A recommended next workout OR recovery period
 
 Current time: {{ currentTime }}
